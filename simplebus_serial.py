@@ -5,7 +5,8 @@ Telemetry format, between two START_END_SYM bytes:
     [hall] [reed switch] [inside temperature whole] [inside temperature fraction]
     [outside temperature whole] [outside temperature fraction]
     [RPM1 whole] [RPM1 fraction] [RPM2 whole] [RPM2 fraction]
-    [RPM3 whole] [RPM3 fraction] [reference temperature] [door stage]
+    [RPM3 whole] [RPM3 fraction] [RPM4 whole] [RPM4 fraction]
+    [reference temperature] [door stage]
 """
 
 from __future__ import annotations
@@ -43,8 +44,8 @@ DISCONNECT_TEXT = "\u041e\u0442\u043a\u043b\u044e\u0447\u0438\u0442\u044c\u0441\
 class TelemetryDecoder:
     """Decode temperatures, three RPM values, and the door stage."""
 
-    def decode_capture(self, payload: bytes) -> tuple[int, int, float, float, int, int, int, float, int] | None:
-        if len(payload) != 14:
+    def decode_capture(self, payload: bytes) -> tuple[int, int, float, float, int, int, int, int, float, int] | None:
+        if len(payload) != 16:
             return None
 
         (
@@ -60,6 +61,8 @@ class TelemetryDecoder:
             rpm2_fraction,
             rpm3_whole,
             rpm3_fraction,
+            rpm4_whole,
+            rpm4_fraction,
             reference_byte,
             door_stage,
         ) = payload
@@ -68,6 +71,7 @@ class TelemetryDecoder:
         rpm1 = self._decode_rpm(rpm1_whole, rpm1_fraction)
         rpm2 = self._decode_rpm(rpm2_whole, rpm2_fraction)
         rpm3 = self._decode_rpm(rpm3_whole, rpm3_fraction)
+        rpm4 = self._decode_rpm(rpm4_whole, rpm4_fraction)
         reference_temperature = self._decode_integer_temperature(reference_byte)
         return (
             int(bool(hall)),
@@ -77,6 +81,7 @@ class TelemetryDecoder:
             rpm1,
             rpm2,
             rpm3,
+            rpm4,
             reference_temperature,
             door_stage,
         )
@@ -98,9 +103,9 @@ class TelemetryDecoder:
 
 
 class TelemetryFrameCollector:
-    """Collect a fixed 14-byte payload wrapped by START_END_SYM."""
+    """Collect a fixed 16-byte payload wrapped by START_END_SYM."""
 
-    def __init__(self, marker: int = proto.MARKER, payload_size: int = 14) -> None:
+    def __init__(self, marker: int = proto.MARKER, payload_size: int = 16) -> None:
         self.marker = marker
         self.payload_size = payload_size
         self.capturing = False
@@ -148,6 +153,7 @@ class TelemetryStore:
         self.rpm1: deque[int] = deque()
         self.rpm2: deque[int] = deque()
         self.rpm3: deque[int] = deque()
+        self.rpm4: deque[int] = deque()
         self.door_stages: deque[int] = deque()
         self._inside_ma_values: deque[float] = deque()
         self._outside_ma_values: deque[float] = deque()
@@ -162,6 +168,7 @@ class TelemetryStore:
         rpm1: int,
         rpm2: int,
         rpm3: int,
+        rpm4: int,
         reference_temperature: float,
         door_stage: int,
     ) -> None:
@@ -171,6 +178,7 @@ class TelemetryStore:
         self.rpm1.append(rpm1)
         self.rpm2.append(rpm2)
         self.rpm3.append(rpm3)
+        self.rpm4.append(rpm4)
         self.reference_temperatures.append(reference_temperature)
         self.door_stages.append(door_stage)
 
@@ -195,6 +203,7 @@ class TelemetryStore:
             self.rpm1.popleft()
             self.rpm2.popleft()
             self.rpm3.popleft()
+            self.rpm4.popleft()
             self.reference_temperatures.popleft()
             self.door_stages.popleft()
 
@@ -211,12 +220,13 @@ class TemperatureWindow(QMainWindow):
 
         figure = Figure(constrained_layout=True)
         self.canvas = FigureCanvas(figure)
-        grid = figure.add_gridspec(6, 2)
-        self.inside_ax = figure.add_subplot(grid[:3, 0])
-        self.outside_ax = figure.add_subplot(grid[3:, 0], sharex=self.inside_ax)
+        grid = figure.add_gridspec(8, 2)
+        self.inside_ax = figure.add_subplot(grid[:4, 0])
+        self.outside_ax = figure.add_subplot(grid[4:, 0], sharex=self.inside_ax)
         self.rpm1_ax = figure.add_subplot(grid[:2, 1], sharex=self.inside_ax)
         self.rpm2_ax = figure.add_subplot(grid[2:4, 1], sharex=self.inside_ax)
-        self.rpm3_ax = figure.add_subplot(grid[4:, 1], sharex=self.inside_ax)
+        self.rpm3_ax = figure.add_subplot(grid[4:6, 1], sharex=self.inside_ax)
+        self.rpm4_ax = figure.add_subplot(grid[6:, 1], sharex=self.inside_ax)
         # self.ax is kept as an alias for the inside graph and its stage shading.
         self.ax = self.inside_ax
         self.inside_line, = self.inside_ax.plot(
@@ -231,6 +241,7 @@ class TemperatureWindow(QMainWindow):
         self.rpm1_line, = self.rpm1_ax.plot([], [], color="tab:green", linewidth=1.2, label="Cooler 1")
         self.rpm2_line, = self.rpm2_ax.plot([], [], color="tab:orange", linewidth=1.2, label="Cooler 2")
         self.rpm3_line, = self.rpm3_ax.plot([], [], color="tab:purple", linewidth=1.2, label="Cooler 3")
+        self.rpm4_line, = self.rpm4_ax.plot([], [], color="tab:brown", linewidth=1.2, label="Cooler 4")
         self.ax.set_title("Temperature")
         self.ax.set_xlabel("Time (s)")
         self.ax.set_ylabel("Temperature (°C)")
@@ -248,13 +259,14 @@ class TemperatureWindow(QMainWindow):
             (self.rpm1_ax, "Cooler 1 RPM"),
             (self.rpm2_ax, "Cooler 2 RPM"),
             (self.rpm3_ax, "Cooler 3 RPM"),
+            (self.rpm4_ax, "Cooler 4 RPM"),
         ):
             axis.set_title(title)
             axis.set_ylabel("RPM")
             axis.set_ylim(0, 4500)
             axis.grid(True, alpha=0.25)
             axis.legend(loc="upper left")
-        self.rpm3_ax.set_xlabel("Time (s)")
+        self.rpm4_ax.set_xlabel("Time (s)")
         self._stage_patches = []
 
         central = QWidget()
@@ -368,6 +380,7 @@ class TemperatureWindow(QMainWindow):
         rpm1: int,
         rpm2: int,
         rpm3: int,
+        rpm4: int,
         reference_temperature: float,
         door_stage: int,
     ) -> None:
@@ -377,6 +390,7 @@ class TemperatureWindow(QMainWindow):
         rpm1_values = list(store.rpm1)
         rpm2_values = list(store.rpm2)
         rpm3_values = list(store.rpm3)
+        rpm4_values = list(store.rpm4)
         stages = list(store.door_stages)
         if not times:
             return
@@ -386,6 +400,7 @@ class TemperatureWindow(QMainWindow):
         self.rpm1_line.set_data(times, rpm1_values)
         self.rpm2_line.set_data(times, rpm2_values)
         self.rpm3_line.set_data(times, rpm3_values)
+        self.rpm4_line.set_data(times, rpm4_values)
         self.reference_line.set_ydata([reference_temperature, reference_temperature])
         self._draw_stage_background(times, stages)
         self.ax.set_xlim(times[0], self._right_edge(times))
@@ -474,12 +489,13 @@ class SerialMonitor(QObject):
                     rpm1,
                     rpm2,
                     rpm3,
+                    rpm4,
                     reference_temperature,
                     door_stage,
                 ) = sample
                 print(
                     f"Telemetry: hall={hall}, reed={reed}, inside={inside_temperature:.2f} C, "
-                    f"outside={outside_temperature:.2f} C, rpm=({rpm1}, {rpm2}, {rpm3}), "
+                    f"outside={outside_temperature:.2f} C, rpm=({rpm1}, {rpm2}, {rpm3}, {rpm4}), "
                     f"reference={reference_temperature:.2f} C, door_stage={door_stage}"
                 )
                 self.store.add(
@@ -488,6 +504,7 @@ class SerialMonitor(QObject):
                     rpm1,
                     rpm2,
                     rpm3,
+                    rpm4,
                     reference_temperature,
                     door_stage,
                 )
@@ -498,6 +515,7 @@ class SerialMonitor(QObject):
                     rpm1,
                     rpm2,
                     rpm3,
+                    rpm4,
                     reference_temperature,
                     door_stage,
                 )
