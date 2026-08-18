@@ -5,7 +5,7 @@ Telemetry format, between two START_END_SYM bytes:
     [hall] [reed switch] [inside temperature whole] [inside temperature fraction]
     [outside temperature whole] [outside temperature fraction]
     [RPM1 whole] [RPM1 fraction] [RPM2 whole] [RPM2 fraction]
-    [RPM3 whole] [RPM3 fraction] [door stage]
+    [RPM3 whole] [RPM3 fraction] [reference temperature] [door stage]
 """
 
 from __future__ import annotations
@@ -33,7 +33,7 @@ from PyQt6.QtWidgets import (
 import simplebus_protocol as proto
 
 
-MAX_POINTS = 5000
+MAX_POINTS = 100
 MA_WINDOW = 7
 REFRESH_PORTS_TEXT = "\u041e\u0431\u043d\u043e\u0432\u0438\u0442\u044c \u043f\u043e\u0440\u0442\u044b"
 CONNECT_TEXT = "\u041f\u043e\u0434\u043a\u043b\u044e\u0447\u0438\u0442\u044c\u0441\u044f"
@@ -41,10 +41,10 @@ DISCONNECT_TEXT = "\u041e\u0442\u043a\u043b\u044e\u0447\u0438\u0442\u044c\u0441\
 
 
 class TelemetryDecoder:
-    """Decode two temperatures, three RPM values, and the door stage."""
+    """Decode temperatures, three RPM values, and the door stage."""
 
-    def decode_capture(self, payload: bytes) -> tuple[int, int, float, float, int, int, int, int] | None:
-        if len(payload) != 13:
+    def decode_capture(self, payload: bytes) -> tuple[int, int, float, float, int, int, int, float, int] | None:
+        if len(payload) != 14:
             return None
 
         (
@@ -60,6 +60,7 @@ class TelemetryDecoder:
             rpm2_fraction,
             rpm3_whole,
             rpm3_fraction,
+            reference_byte,
             door_stage,
         ) = payload
         inside_temperature = self._decode_temperature(inside_whole, inside_fraction)
@@ -67,6 +68,7 @@ class TelemetryDecoder:
         rpm1 = self._decode_rpm(rpm1_whole, rpm1_fraction)
         rpm2 = self._decode_rpm(rpm2_whole, rpm2_fraction)
         rpm3 = self._decode_rpm(rpm3_whole, rpm3_fraction)
+        reference_temperature = self._decode_integer_temperature(reference_byte)
         return (
             int(bool(hall)),
             int(bool(reed)),
@@ -75,14 +77,19 @@ class TelemetryDecoder:
             rpm1,
             rpm2,
             rpm3,
+            reference_temperature,
             door_stage,
         )
 
     @staticmethod
     def _decode_temperature(whole_byte: int, normalized_fraction: int) -> float:
-        whole_part = whole_byte if whole_byte < 128 else whole_byte - 256
+        whole_part = TelemetryDecoder._decode_integer_temperature(whole_byte)
         hundredths = round(normalized_fraction * 99 / 255)
         return whole_part + hundredths / 100
+
+    @staticmethod
+    def _decode_integer_temperature(value: int) -> int:
+        return value if value < 128 else value - 256
 
     @staticmethod
     def _decode_rpm(whole_byte: int, fraction_byte: int) -> int:
@@ -91,9 +98,9 @@ class TelemetryDecoder:
 
 
 class TelemetryFrameCollector:
-    """Collect a fixed 13-byte payload wrapped by START_END_SYM."""
+    """Collect a fixed 14-byte payload wrapped by START_END_SYM."""
 
-    def __init__(self, marker: int = proto.MARKER, payload_size: int = 13) -> None:
+    def __init__(self, marker: int = proto.MARKER, payload_size: int = 14) -> None:
         self.marker = marker
         self.payload_size = payload_size
         self.capturing = False
@@ -137,6 +144,7 @@ class TelemetryStore:
         self.outside_temperatures: deque[float] = deque()
         self.inside_temperature_ma: deque[float] = deque()
         self.outside_temperature_ma: deque[float] = deque()
+        self.reference_temperatures: deque[float] = deque()
         self.rpm1: deque[int] = deque()
         self.rpm2: deque[int] = deque()
         self.rpm3: deque[int] = deque()
@@ -154,6 +162,7 @@ class TelemetryStore:
         rpm1: int,
         rpm2: int,
         rpm3: int,
+        reference_temperature: float,
         door_stage: int,
     ) -> None:
         self.times.append(time.monotonic() - self._started_at)
@@ -162,6 +171,7 @@ class TelemetryStore:
         self.rpm1.append(rpm1)
         self.rpm2.append(rpm2)
         self.rpm3.append(rpm3)
+        self.reference_temperatures.append(reference_temperature)
         self.door_stages.append(door_stage)
 
         self._inside_ma_values.append(inside_temperature)
@@ -185,6 +195,7 @@ class TelemetryStore:
             self.rpm1.popleft()
             self.rpm2.popleft()
             self.rpm3.popleft()
+            self.reference_temperatures.popleft()
             self.door_stages.popleft()
 
 
@@ -210,6 +221,9 @@ class TemperatureWindow(QMainWindow):
         self.ax = self.inside_ax
         self.inside_line, = self.inside_ax.plot(
             [], [], color="tab:red", linewidth=1.5, label="Inside stand MA(7)"
+        )
+        self.reference_line = self.inside_ax.axhline(
+            0, color="black", linestyle="--", linewidth=1.2, label="Reference temperature"
         )
         self.outside_line, = self.outside_ax.plot(
             [], [], color="tab:blue", linewidth=1.5, label="Outside MA(7)"
@@ -354,6 +368,7 @@ class TemperatureWindow(QMainWindow):
         rpm1: int,
         rpm2: int,
         rpm3: int,
+        reference_temperature: float,
         door_stage: int,
     ) -> None:
         times = list(store.times)
@@ -371,6 +386,7 @@ class TemperatureWindow(QMainWindow):
         self.rpm1_line.set_data(times, rpm1_values)
         self.rpm2_line.set_data(times, rpm2_values)
         self.rpm3_line.set_data(times, rpm3_values)
+        self.reference_line.set_ydata([reference_temperature, reference_temperature])
         self._draw_stage_background(times, stages)
         self.ax.set_xlim(times[0], self._right_edge(times))
         self.ax.relim()
@@ -380,7 +396,8 @@ class TemperatureWindow(QMainWindow):
         temperature = inside_temperature
         status_message = (
             f"Inside: {inside_temperature:.2f} C   |   Outside: {outside_temperature:.2f} C   |   "
-            f"Door stage: {door_stage}   |   Samples: {len(times)}"
+            f"Reference: {reference_temperature:.2f} C   |   Door stage: {door_stage}   |   "
+            f"Samples: {len(times)}"
         )
         QTimer.singleShot(0, lambda: self.statusBar().showMessage(status_message))
         self.statusBar().showMessage(
@@ -457,15 +474,22 @@ class SerialMonitor(QObject):
                     rpm1,
                     rpm2,
                     rpm3,
+                    reference_temperature,
                     door_stage,
                 ) = sample
                 print(
                     f"Telemetry: hall={hall}, reed={reed}, inside={inside_temperature:.2f} C, "
                     f"outside={outside_temperature:.2f} C, rpm=({rpm1}, {rpm2}, {rpm3}), "
-                    f"door_stage={door_stage}"
+                    f"reference={reference_temperature:.2f} C, door_stage={door_stage}"
                 )
                 self.store.add(
-                    inside_temperature, outside_temperature, rpm1, rpm2, rpm3, door_stage
+                    inside_temperature,
+                    outside_temperature,
+                    rpm1,
+                    rpm2,
+                    rpm3,
+                    reference_temperature,
+                    door_stage,
                 )
                 self.window.update_telemetry(
                     self.store,
@@ -474,6 +498,7 @@ class SerialMonitor(QObject):
                     rpm1,
                     rpm2,
                     rpm3,
+                    reference_temperature,
                     door_stage,
                 )
 
