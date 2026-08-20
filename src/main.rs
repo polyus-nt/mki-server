@@ -1,3 +1,5 @@
+#![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
+
 use std::collections::VecDeque;
 use std::io::{Read, Write};
 use std::time::{Duration, Instant};
