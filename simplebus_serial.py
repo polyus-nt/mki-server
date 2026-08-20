@@ -34,8 +34,9 @@ from PyQt6.QtWidgets import (
 import simplebus_protocol as proto
 
 
-MAX_POINTS = 100
+MAX_POINTS = 1000
 MA_WINDOW = 7
+MAX_FAN_RPM = 5000
 REFRESH_PORTS_TEXT = "\u041e\u0431\u043d\u043e\u0432\u0438\u0442\u044c \u043f\u043e\u0440\u0442\u044b"
 CONNECT_TEXT = "\u041f\u043e\u0434\u043a\u043b\u044e\u0447\u0438\u0442\u044c\u0441\u044f"
 DISCONNECT_TEXT = "\u041e\u0442\u043a\u043b\u044e\u0447\u0438\u0442\u044c\u0441\u044f"
@@ -99,7 +100,7 @@ class TelemetryDecoder:
     @staticmethod
     def _decode_rpm(whole_byte: int, fraction_byte: int) -> int:
         encoded = (whole_byte << 8) | fraction_byte
-        return (encoded * 4500 + 32767) // 65535
+        return (encoded * MAX_FAN_RPM + 32767) // 65535
 
 
 class TelemetryFrameCollector:
@@ -255,15 +256,15 @@ class TemperatureWindow(QMainWindow):
         self.outside_ax.set_ylabel("Temperature (C)")
         self.outside_ax.grid(True, alpha=0.25)
         self.outside_ax.legend(loc="upper left")
-        for axis, title in (
-            (self.rpm1_ax, "Cooler 1 RPM"),
-            (self.rpm2_ax, "Cooler 2 RPM"),
-            (self.rpm3_ax, "Cooler 3 RPM"),
-            (self.rpm4_ax, "Cooler 4 RPM"),
+        for axis, title, maximum_rpm in (
+            (self.rpm1_ax, "Cooler 1 RPM", 3000),
+            (self.rpm2_ax, "Cooler 2 RPM", 3000),
+            (self.rpm3_ax, "Cooler 3 RPM", 3000),
+            (self.rpm4_ax, "Cooler 4 RPM", 5000),
         ):
             axis.set_title(title)
             axis.set_ylabel("RPM")
-            axis.set_ylim(0, 4500)
+            axis.set_ylim(0, maximum_rpm)
             axis.grid(True, alpha=0.25)
             axis.legend(loc="upper left")
         self.rpm4_ax.set_xlabel("Time (s)")
