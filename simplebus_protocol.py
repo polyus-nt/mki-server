@@ -8,7 +8,10 @@ from __future__ import annotations
 CR = b"\r"
 LF = b"\n"
 COMPUTER_ADDR = 99
+BOARD_ADDR = 12
 MARKER = 12  # start/end of transmission to computer
+ETALON_TEMP_CODE = 10
+DEFAULT_ETALON_TEMPERATURE = 25
 
 try:
     from serial.tools import list_ports

@@ -27,6 +27,7 @@ from PyQt6.QtWidgets import (
     QMainWindow,
     QMessageBox,
     QPushButton,
+    QSpinBox,
     QVBoxLayout,
     QWidget,
 )
@@ -276,17 +277,27 @@ class TemperatureWindow(QMainWindow):
         self.port_combo = QComboBox()
         self.refresh_button = QPushButton("Обновить порты")
         self.connect_button = QPushButton("Подключиться")
+        self.reference_temperature_input = QSpinBox()
+        self.reference_temperature_input.setRange(1, 255)
+        self.reference_temperature_input.setValue(proto.DEFAULT_ETALON_TEMPERATURE)
+        self.reference_temperature_input.setSuffix(" °C")
+        self.set_reference_button = QPushButton("Установить эталонную температуру")
+        self.reference_temperature_input.setEnabled(False)
+        self.set_reference_button.setEnabled(False)
         self.refresh_button.setText(REFRESH_PORTS_TEXT)
         self.connect_button.setText(CONNECT_TEXT)
         controls.addWidget(self.port_combo)
         controls.addWidget(self.refresh_button)
         controls.addWidget(self.connect_button)
+        controls.addWidget(self.reference_temperature_input)
+        controls.addWidget(self.set_reference_button)
         controls.addStretch()
         layout.addLayout(controls)
         layout.addWidget(self.canvas)
         self.setCentralWidget(central)
         self.refresh_button.clicked.connect(self.refresh_ports)
         self.connect_button.clicked.connect(self.toggle_connection)
+        self.set_reference_button.clicked.connect(self.queue_reference_temperature)
         self.refresh_ports()
         if initial_port:
             index = self.port_combo.findData(initial_port)
@@ -315,6 +326,8 @@ class TemperatureWindow(QMainWindow):
             QTimer.singleShot(0, lambda: self.connect_button.setText(CONNECT_TEXT))
             self.port_combo.setEnabled(True)
             self.refresh_button.setEnabled(True)
+            self.reference_temperature_input.setEnabled(False)
+            self.set_reference_button.setEnabled(False)
             self.connect_button.setText("Подключиться")
             self.statusBar().showMessage("Отключено.")
             return
@@ -332,8 +345,19 @@ class TemperatureWindow(QMainWindow):
         QTimer.singleShot(0, lambda: self.connect_button.setText(DISCONNECT_TEXT))
         self.port_combo.setEnabled(False)
         self.refresh_button.setEnabled(False)
+        self.reference_temperature_input.setEnabled(True)
+        self.set_reference_button.setEnabled(True)
         self.connect_button.setText("Отключиться")
         self.statusBar().showMessage(f"Connected to {port} at {self.baud_rate} baud.")
+
+    def queue_reference_temperature(self) -> None:
+        if self.monitor is None:
+            return
+        temperature = self.reference_temperature_input.value()
+        self.monitor.queue_reference_temperature(temperature)
+        self.statusBar().showMessage(
+            f"Эталонная температура {temperature} °C ожидает разрешения от платы."
+        )
 
     def closeEvent(self, event) -> None:  # type: ignore[override]
         if self.monitor is not None:
@@ -432,6 +456,7 @@ class SerialMonitor(QObject):
         self.decoder = TelemetryDecoder()
         self.collector = TelemetryFrameCollector()
         self.store = TelemetryStore()
+        self.pending_reference_temperature = proto.DEFAULT_ETALON_TEMPERATURE
         self._packet_buffer = bytearray()
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.poll)
@@ -470,6 +495,11 @@ class SerialMonitor(QObject):
             except ValueError:
                 continue
             if address != proto.COMPUTER_ADDR:
+                continue
+
+            if self._is_etalon_temperature_permission(data[0]):
+                self.collector.reset()
+                self._send_pending_reference_temperature()
                 continue
 
             if self.collector.process_byte(data[0]):
@@ -520,6 +550,31 @@ class SerialMonitor(QObject):
                     reference_temperature,
                     door_stage,
                 )
+
+    def queue_reference_temperature(self, temperature: int) -> None:
+        if not 1 <= temperature <= 0xFF:
+            raise ValueError("Эталонная температура должна быть целым числом от 1 до 255.")
+        self.pending_reference_temperature = temperature
+
+    def _is_etalon_temperature_permission(self, value: int) -> bool:
+        """Recognize START_END_SYMBOL, ETALON_TEMP_CODE, START_END_SYMBOL."""
+        return (
+            self.collector.capturing
+            and self.collector.get_buffer() == bytes([proto.ETALON_TEMP_CODE])
+            and value == proto.MARKER
+        )
+
+    def _send_pending_reference_temperature(self) -> None:
+        temperature = self.pending_reference_temperature
+        try:
+            self.device.write(proto.encode_packet(proto.BOARD_ADDR, bytes([temperature])))
+        except serial.SerialException as exc:
+            self.window.statusBar().showMessage(f"Serial error: {exc}")
+            return
+
+        self.window.statusBar().showMessage(
+            f"Эталонная температура {temperature} °C отправлена плате."
+        )
 
     def close(self) -> None:
         self.timer.stop()
