@@ -1,0 +1,9 @@
+[package]
+name = "tjc-commutator"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+eframe = "0.31"
+egui_plot = "0.31"
+serialport = "4.7"
