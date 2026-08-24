@@ -12,9 +12,13 @@ use serialport::SerialPort;
 const COMPUTER_ADDR: u8 = 99;
 const BOARD_ADDR: u8 = 12;
 const MARKER: u8 = 12;
+const APPLICATION_NAME: &str = "Теплоизоляционный блок";
+const APPLICATION_VERSION: &str = env!("CARGO_PKG_VERSION");
 const ETALON_TEMP_CODE: u8 = 10;
 const DEFAULT_ETALON_TEMPERATURE: u8 = 25;
 const TELEMETRY_SIZE: usize = 16;
+const MAX_TELEMETRY_FRAME_AGE: Duration = Duration::from_secs(3);
+const MAX_TELEMETRY_CANDIDATES: usize = 32;
 const MAX_POINTS: usize = 1_000;
 const MA_WINDOW: usize = 7;
 const SERIAL_POLL_INTERVAL: Duration = Duration::from_millis(10);
@@ -41,50 +45,81 @@ fn decode_packet(packet: &[u8]) -> Option<(u8, u8)> {
     Some((u8::from_str_radix(address, 16).ok()?, packet[3]))
 }
 
+struct TelemetryCandidate {
+    payload: Vec<u8>,
+    started_at: Instant,
+}
+
 struct TelemetryCollector {
-    capturing: bool,
-    buffer: Vec<u8>,
+    candidates: Vec<TelemetryCandidate>,
 }
 
 impl TelemetryCollector {
     fn new() -> Self {
         Self {
-            capturing: false,
-            buffer: Vec::with_capacity(TELEMETRY_SIZE),
+            candidates: Vec::with_capacity(MAX_TELEMETRY_CANDIDATES),
         }
     }
 
     fn reset(&mut self) {
-        self.capturing = false;
-        self.buffer.clear();
+        self.candidates.clear();
     }
 
     fn is_temperature_permission(&self, value: u8) -> bool {
-        self.capturing && self.buffer == [ETALON_TEMP_CODE] && value == MARKER
+        value == MARKER
+            && self
+                .candidates
+                .iter()
+                .any(|candidate| candidate.payload == [ETALON_TEMP_CODE])
     }
 
-    fn feed(&mut self, value: u8) -> Option<Vec<u8>> {
-        if !self.capturing {
-            if value == MARKER {
-                self.capturing = true;
-                self.buffer.clear();
+    fn feed(&mut self, value: u8, now: Instant) -> Option<Vec<u8>> {
+        self.candidates.retain(|candidate| {
+            now.duration_since(candidate.started_at) <= MAX_TELEMETRY_FRAME_AGE
+        });
+
+        let mut completed = None;
+        self.candidates.retain_mut(|candidate| {
+            if candidate.payload.len() < TELEMETRY_SIZE {
+                candidate.payload.push(value);
+                return true;
             }
-            return None;
-        }
 
-        if self.buffer.len() < TELEMETRY_SIZE {
-            self.buffer.push(value);
-            return None;
-        }
+            if value == MARKER {
+                if completed.is_none() && is_plausible_telemetry(&candidate.payload) {
+                    completed = Some(std::mem::take(&mut candidate.payload));
+                }
+            }
+            false
+        });
 
+        // Marker is allowed in the payload, so it is also kept as data for all
+        // existing candidates above. In parallel it may start a new frame.
         if value == MARKER {
-            self.capturing = false;
-            return Some(std::mem::take(&mut self.buffer));
+            self.candidates.push(TelemetryCandidate {
+                payload: Vec::with_capacity(TELEMETRY_SIZE),
+                started_at: now,
+            });
+            if self.candidates.len() > MAX_TELEMETRY_CANDIDATES {
+                self.candidates.remove(0);
+            }
         }
 
-        self.reset();
-        None
+        completed
     }
+}
+
+fn is_plausible_temperature(value: u8) -> bool {
+    (-55..=125).contains(&signed_temperature(value))
+}
+
+fn is_plausible_telemetry(payload: &[u8]) -> bool {
+    payload.len() == TELEMETRY_SIZE
+        && payload[0] <= 1 // Hall sensor
+        && payload[1] <= 1 // Reed switch
+        && is_plausible_temperature(payload[2])
+        && is_plausible_temperature(payload[4])
+        && is_plausible_temperature(payload[14])
 }
 
 #[derive(Clone, Copy)]
@@ -125,6 +160,102 @@ fn decode_telemetry(payload: &[u8]) -> Option<Telemetry> {
         reference: signed_temperature(payload[14]),
         door_stage: payload[15],
     })
+}
+
+#[cfg(test)]
+mod telemetry_collector_tests {
+    use super::*;
+
+    fn payload() -> [u8; TELEMETRY_SIZE] {
+        [
+            1, 0, // Hall and reed switch
+            23, 0, // Temperature inside
+            18, 0, // Temperature outside
+            0, 0, 0, 0, 0, 0, 0, 0,  // Four RPM values
+            25, // Reference temperature
+            1,  // Door stage
+        ]
+    }
+
+    fn frame(payload: &[u8]) -> Vec<u8> {
+        let mut bytes = Vec::with_capacity(payload.len() + 2);
+        bytes.push(MARKER);
+        bytes.extend_from_slice(payload);
+        bytes.push(MARKER);
+        bytes
+    }
+
+    fn collect(bytes: &[u8]) -> Vec<Vec<u8>> {
+        let mut collector = TelemetryCollector::new();
+        let now = Instant::now();
+        bytes
+            .iter()
+            .filter_map(|byte| collector.feed(*byte, now))
+            .collect()
+    }
+
+    #[test]
+    fn accepts_a_complete_frame() {
+        let expected = payload();
+        assert_eq!(collect(&frame(&expected)), vec![expected.to_vec()]);
+    }
+
+    #[test]
+    fn keeps_marker_values_inside_the_payload() {
+        let mut expected = payload();
+        expected[3] = MARKER;
+        assert_eq!(collect(&frame(&expected)), vec![expected.to_vec()]);
+    }
+
+    #[test]
+    fn resynchronizes_after_a_lost_payload_byte() {
+        let expected = payload();
+        let mut damaged = frame(&expected);
+        damaged.remove(1); // Drop Hall: the first damaged frame is implausible.
+        damaged.extend(frame(&expected));
+
+        assert_eq!(collect(&damaged), vec![expected.to_vec()]);
+    }
+
+    #[test]
+    fn resynchronizes_after_an_extra_payload_byte() {
+        let expected = payload();
+        let mut damaged = frame(&expected);
+        damaged.insert(5, 0x7f);
+        damaged.extend(frame(&expected));
+
+        assert_eq!(collect(&damaged), vec![expected.to_vec()]);
+    }
+
+    #[test]
+    fn discards_a_stale_fragment_before_the_next_frame() {
+        let expected = payload();
+        let mut collector = TelemetryCollector::new();
+        let started_at = Instant::now();
+        collector.feed(MARKER, started_at);
+        collector.feed(1, started_at);
+
+        let next_frame_at = started_at + MAX_TELEMETRY_FRAME_AGE + Duration::from_millis(1);
+        assert_eq!(collector.feed(MARKER, next_frame_at), None);
+
+        for byte in expected {
+            assert_eq!(collector.feed(byte, next_frame_at), None);
+        }
+        assert_eq!(
+            collector.feed(MARKER, next_frame_at),
+            Some(expected.to_vec())
+        );
+    }
+
+    #[test]
+    fn recognizes_the_reference_temperature_permission() {
+        let mut collector = TelemetryCollector::new();
+        let now = Instant::now();
+        collector.feed(MARKER, now);
+        collector.feed(ETALON_TEMP_CODE, now);
+
+        assert!(collector.is_temperature_permission(MARKER));
+    }
 }
 
 #[derive(Default)]
@@ -407,7 +538,7 @@ impl CommutatorApp {
             self.send_reference_temperature();
             return;
         }
-        if let Some(payload) = self.collector.feed(data) {
+        if let Some(payload) = self.collector.feed(data, Instant::now()) {
             if let Some(sample) = decode_telemetry(&payload) {
                 self.store
                     .add(self.started_at.elapsed().as_secs_f64(), sample);
@@ -439,7 +570,7 @@ impl CommutatorApp {
         }
     }
 
-    fn draw_rpm_plot(&self, ui: &mut egui::Ui, index: usize, maximum: f64) {
+    fn draw_rpm_plot(&self, ui: &mut egui::Ui, index: usize, maximum: f64, height: f32) {
         ui.label(
             RichText::new(format!(
                 "Кулер {} — обороты (до {} RPM)",
@@ -451,7 +582,7 @@ impl CommutatorApp {
         );
         Self::card_frame().show(ui, |ui| {
             Plot::new(format!("rpm-{}", index + 1))
-                .height(100.0)
+                .height(height)
                 .allow_scroll(false)
                 .allow_drag(false)
                 .allow_zoom(false)
@@ -490,7 +621,7 @@ impl eframe::App for CommutatorApp {
                 ui.horizontal(|ui| {
                     ui.vertical(|ui| {
                         ui.label(
-                            RichText::new("TJC COMMUTATOR")
+                            RichText::new(APPLICATION_NAME)
                                 .size(23.0)
                                 .strong()
                                 .color(Color32::from_rgb(30, 41, 59)),
@@ -509,7 +640,8 @@ impl eframe::App for CommutatorApp {
                 ui.separator();
                 ui.add_space(4.0);
                 ui.horizontal_wrapped(|ui| {
-                    egui::ComboBox::from_label("COM-порт")
+                    ui.label("Порт");
+                    egui::ComboBox::from_id_salt("serial-port")
                         .selected_text(if self.selected_port.is_empty() {
                             "Не найден"
                         } else {
@@ -523,12 +655,17 @@ impl eframe::App for CommutatorApp {
                     if ui.button("Обновить порты").clicked() && self.port.is_none() {
                         self.refresh_ports();
                     }
+                    let connection_label = if self.port.is_some() {
+                        "Отключиться"
+                    } else {
+                        "Подключиться"
+                    };
+                    let connection_color = if self.port.is_some() { DANGER } else { ACCENT };
                     if ui
-                        .button(if self.port.is_some() {
-                            "Отключиться"
-                        } else {
-                            "Подключиться"
-                        })
+                        .add(
+                            egui::Button::new(RichText::new(connection_label).strong())
+                                .fill(connection_color),
+                        )
                         .clicked()
                     {
                         self.toggle_connection();
@@ -547,9 +684,8 @@ impl eframe::App for CommutatorApp {
             });
 
         egui::SidePanel::right("fan-plots")
-            .default_width(380.0)
+            .default_width(ctx.available_rect().width() * 0.5)
             .min_width(320.0)
-            .max_width(460.0)
             .resizable(true)
             .frame(
                 egui::Frame::default()
@@ -557,11 +693,13 @@ impl eframe::App for CommutatorApp {
                     .inner_margin(egui::Margin::same(16)),
             )
             .show(ctx, |ui| {
+                ui.spacing_mut().item_spacing.y = 6.0;
                 ui.heading("Кулеры");
-                self.draw_rpm_plot(ui, 0, 3_000.0);
-                self.draw_rpm_plot(ui, 1, 3_000.0);
-                self.draw_rpm_plot(ui, 2, 3_000.0);
-                self.draw_rpm_plot(ui, 3, 5_000.0);
+                let fan_plot_height = ((ui.available_height() - 212.0) / 4.0).max(80.0);
+                self.draw_rpm_plot(ui, 0, 3_000.0, fan_plot_height);
+                self.draw_rpm_plot(ui, 1, 3_000.0, fan_plot_height);
+                self.draw_rpm_plot(ui, 2, 3_000.0, fan_plot_height);
+                self.draw_rpm_plot(ui, 3, 5_000.0, fan_plot_height);
             });
 
         egui::CentralPanel::default()
@@ -596,7 +734,7 @@ impl eframe::App for CommutatorApp {
                             }
                             plot_ui.line(
                                 Line::new(self.store.points(&self.store.inside_ma))
-                                    .name("Внутри, MA(7)")
+                                    .name("Градусов Цельсия, MA(7)")
                                     .color(Color32::from_rgb(235, 99, 84))
                                     .width(2.5),
                             );
@@ -629,7 +767,7 @@ impl eframe::App for CommutatorApp {
                             plot_ui.set_auto_bounds([true, true]);
                             plot_ui.line(
                                 Line::new(self.store.points(&self.store.outside_ma))
-                                    .name("Снаружи, MA(7)")
+                                    .name("Градусов Цельсия, MA(7)")
                                     .color(Color32::from_rgb(54, 139, 230))
                                     .width(2.5),
                             );
@@ -646,8 +784,9 @@ fn list_ports() -> Vec<String> {
 }
 
 fn main() -> eframe::Result<()> {
+    let window_title = format!("{APPLICATION_NAME} v{APPLICATION_VERSION}");
     eframe::run_native(
-        "TJC Commutator",
+        &window_title,
         eframe::NativeOptions {
             viewport: egui::ViewportBuilder::default().with_inner_size([1_200.0, 850.0]),
             ..Default::default()
