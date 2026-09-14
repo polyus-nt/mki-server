@@ -16,7 +16,8 @@ const APPLICATION_NAME: &str = "Теплоизоляционный блок";
 const APPLICATION_VERSION: &str = env!("CARGO_PKG_VERSION");
 const ETALON_TEMP_CODE: u8 = 10;
 const DEFAULT_ETALON_TEMPERATURE: u8 = 25;
-const TELEMETRY_SIZE: usize = 16;
+const TELEMETRY_VERSION: u8 = 1;
+const TELEMETRY_SIZE: usize = 29;
 const MAX_TELEMETRY_FRAME_AGE: Duration = Duration::from_secs(3);
 const MAX_TELEMETRY_CANDIDATES: usize = 32;
 const MAX_POINTS: usize = 1_000;
@@ -115,20 +116,35 @@ fn is_plausible_temperature(value: u8) -> bool {
 
 fn is_plausible_telemetry(payload: &[u8]) -> bool {
     payload.len() == TELEMETRY_SIZE
-        && payload[0] <= 1 // Hall sensor
-        && payload[1] <= 1 // Reed switch
+        && payload[0] == TELEMETRY_VERSION
+        && payload[1] <= 1 // Hall sensor
         && is_plausible_temperature(payload[2])
         && is_plausible_temperature(payload[4])
-        && is_plausible_temperature(payload[14])
+        && payload[7] <= 60 // Target
+        && payload[8] <= 1 // Door open
+        && payload[10] <= 3 // Mode
+        && payload[11] <= 2 // Door policy
 }
 
 #[derive(Clone, Copy)]
 struct Telemetry {
+    hall: bool,
     inside: f64,
     outside: f64,
+    inside_valid: bool,
+    inside_fresh: bool,
+    outside_valid: bool,
+    outside_fresh: bool,
+    pwm: [u8; 4],
     rpm: [u32; 4],
     reference: i8,
+    door_open: bool,
     door_stage: u8,
+    mode: u8,
+    door_policy: u8,
+    stable_version: u16,
+    candidate_version: Option<u16>,
+    failed_mask: u8,
 }
 
 fn signed_temperature(value: u8) -> i8 {
@@ -140,25 +156,38 @@ fn decode_temperature(whole: u8, fraction: u8) -> f64 {
 }
 
 fn decode_rpm(whole: u8, fraction: u8) -> u32 {
-    let encoded = u32::from(u16::from_be_bytes([whole, fraction]));
-    (encoded * 5_000 + 32_767) / 65_535
+    u32::from(u16::from_be_bytes([whole, fraction]))
 }
 
 fn decode_telemetry(payload: &[u8]) -> Option<Telemetry> {
     if payload.len() != TELEMETRY_SIZE {
         return None;
     }
+    let sensor_flags = payload[6];
+    let candidate_version = u16::from_be_bytes([payload[14], payload[15]]);
     Some(Telemetry {
+        hall: payload[1] != 0,
         inside: decode_temperature(payload[2], payload[3]),
         outside: decode_temperature(payload[4], payload[5]),
+        inside_valid: sensor_flags & 0x01 != 0,
+        inside_fresh: sensor_flags & 0x02 != 0,
+        outside_valid: sensor_flags & 0x04 != 0,
+        outside_fresh: sensor_flags & 0x08 != 0,
+        pwm: [payload[16], payload[17], payload[18], payload[19]],
         rpm: [
-            decode_rpm(payload[6], payload[7]),
-            decode_rpm(payload[8], payload[9]),
-            decode_rpm(payload[10], payload[11]),
-            decode_rpm(payload[12], payload[13]),
+            decode_rpm(payload[20], payload[21]),
+            decode_rpm(payload[22], payload[23]),
+            decode_rpm(payload[24], payload[25]),
+            decode_rpm(payload[26], payload[27]),
         ],
-        reference: signed_temperature(payload[14]),
-        door_stage: payload[15],
+        reference: payload[7] as i8,
+        door_open: payload[8] != 0,
+        door_stage: payload[9],
+        mode: payload[10],
+        door_policy: payload[11],
+        stable_version: u16::from_be_bytes([payload[12], payload[13]]),
+        candidate_version: (candidate_version != u16::MAX).then_some(candidate_version),
+        failed_mask: payload[28],
     })
 }
 
@@ -168,12 +197,22 @@ mod telemetry_collector_tests {
 
     fn payload() -> [u8; TELEMETRY_SIZE] {
         [
-            1, 0, // Hall and reed switch
+            1, // Format version
+            1, // Hall
             23, 0, // Temperature inside
-            18, 0, // Temperature outside
-            0, 0, 0, 0, 0, 0, 0, 0,  // Four RPM values
-            25, // Reference temperature
-            1,  // Door stage
+            18, 0,    // Temperature outside
+            0x0f, // Both sensors valid and fresh
+            25,   // Target
+            0, 1, // Door open and stage
+            0, 0, // Mode and door policy
+            0, 1, // Stable version
+            0xff, 0xff, // No candidate
+            64, 64, 64, 64, // Applied PWM
+            0x03, 0x03, // RPM 1: the OK byte is valid payload
+            0x0f, 0xa0, // RPM 2: 4000
+            0x17, 0x70, // RPM 3: 6000
+            0, 0, // RPM 4
+            0, // Failed mask
         ]
     }
 
@@ -542,9 +581,50 @@ impl CommutatorApp {
             if let Some(sample) = decode_telemetry(&payload) {
                 self.store
                     .add(self.started_at.elapsed().as_secs_f64(), sample);
+                let candidate = sample
+                    .candidate_version
+                    .map(|version| version.to_string())
+                    .unwrap_or_else(|| "—".to_owned());
                 self.status = format!(
-                    "Температура внутри: {:.2} °C | Снаружи: {:.2} °C | Эталон: {} °C",
-                    sample.inside, sample.outside, sample.reference
+                    "Внутри: {:.2} °C ({}{}) | Снаружи: {:.2} °C ({}{}) | Цель: {} °C | \
+                     Дверь: {} / стадия {} | Режим: {} | Hall: {} | PWM: {:?} | Отказы: {:04b} | \
+                     Конфигурация: {} / {} | Политика двери: {}",
+                    sample.inside,
+                    if sample.inside_valid {
+                        "valid"
+                    } else {
+                        "invalid"
+                    },
+                    if sample.inside_fresh {
+                        ", fresh"
+                    } else {
+                        ", stale"
+                    },
+                    sample.outside,
+                    if sample.outside_valid {
+                        "valid"
+                    } else {
+                        "invalid"
+                    },
+                    if sample.outside_fresh {
+                        ", fresh"
+                    } else {
+                        ", stale"
+                    },
+                    sample.reference,
+                    if sample.door_open {
+                        "открыта"
+                    } else {
+                        "закрыта"
+                    },
+                    sample.door_stage,
+                    sample.mode,
+                    if sample.hall { "1" } else { "0" },
+                    sample.pwm,
+                    sample.failed_mask,
+                    sample.stable_version,
+                    candidate,
+                    sample.door_policy,
                 );
             } else {
                 self.status = format!("Некорректный кадр телеметрии: {:02X?}", payload);
@@ -570,15 +650,11 @@ impl CommutatorApp {
         }
     }
 
-    fn draw_rpm_plot(&self, ui: &mut egui::Ui, index: usize, maximum: f64, height: f32) {
+    fn draw_rpm_plot(&self, ui: &mut egui::Ui, index: usize, height: f32) {
         ui.label(
-            RichText::new(format!(
-                "Кулер {} — обороты (до {} RPM)",
-                index + 1,
-                maximum as u32
-            ))
-            .size(16.0)
-            .strong(),
+            RichText::new(format!("Кулер {} — raw RPM", index + 1))
+                .size(16.0)
+                .strong(),
         );
         Self::card_frame().show(ui, |ui| {
             Plot::new(format!("rpm-{}", index + 1))
@@ -674,7 +750,7 @@ impl eframe::App for CommutatorApp {
                     ui.add_enabled(
                         self.port.is_some(),
                         egui::DragValue::new(&mut self.reference_temperature)
-                            .range(1..=255)
+                            .range(0..=60)
                             .prefix("Эталон: ")
                             .suffix(" °C"),
                     );
@@ -696,10 +772,10 @@ impl eframe::App for CommutatorApp {
                 ui.spacing_mut().item_spacing.y = 6.0;
                 ui.heading("Кулеры");
                 let fan_plot_height = ((ui.available_height() - 212.0) / 4.0).max(80.0);
-                self.draw_rpm_plot(ui, 0, 3_000.0, fan_plot_height);
-                self.draw_rpm_plot(ui, 1, 3_000.0, fan_plot_height);
-                self.draw_rpm_plot(ui, 2, 3_000.0, fan_plot_height);
-                self.draw_rpm_plot(ui, 3, 5_000.0, fan_plot_height);
+                self.draw_rpm_plot(ui, 0, fan_plot_height);
+                self.draw_rpm_plot(ui, 1, fan_plot_height);
+                self.draw_rpm_plot(ui, 2, fan_plot_height);
+                self.draw_rpm_plot(ui, 3, fan_plot_height);
             });
 
         egui::CentralPanel::default()
