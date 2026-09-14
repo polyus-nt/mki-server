@@ -2,12 +2,22 @@
 
 use std::collections::VecDeque;
 use std::io::{Read, Write};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use eframe::egui;
 use egui::{Color32, RichText, Stroke};
 use egui_plot::{Legend, Line, LineStyle, Plot, PlotBounds, PlotPoints, Polygon};
 use serialport::SerialPort;
+
+mod database;
+mod mcp;
+mod serial;
+mod state;
+
+use database::Database;
+use serial::CommandBroker;
+use state::{SharedState, SystemState};
 
 const COMPUTER_ADDR: u8 = 99;
 const BOARD_ADDR: u8 = 12;
@@ -86,10 +96,9 @@ impl TelemetryCollector {
                 return true;
             }
 
-            if value == MARKER {
-                if completed.is_none() && is_plausible_telemetry(&candidate.payload) {
-                    completed = Some(std::mem::take(&mut candidate.payload));
-                }
+            if value == MARKER && completed.is_none() && is_plausible_telemetry(&candidate.payload)
+            {
+                completed = Some(std::mem::take(&mut candidate.payload));
             }
             false
         });
@@ -460,6 +469,12 @@ struct CommutatorApp {
     started_at: Instant,
     last_poll: Instant,
     status: String,
+    system_state: SharedState,
+    database: Database,
+    command_broker: Arc<Mutex<CommandBroker>>,
+    _mcp_server: mcp::McpServer,
+    control_response: Option<(u8, Vec<u8>)>,
+    probe_fan: u8,
 }
 
 impl CommutatorApp {
@@ -483,6 +498,19 @@ impl CommutatorApp {
         ctx.set_style(style);
 
         let ports = list_ports();
+        let database =
+            Database::open("tjc-commutator.sqlite").expect("create SQLite telemetry database");
+        let system_state = SharedState::default();
+        let command_broker = Arc::new(Mutex::new(CommandBroker::default()));
+        let mcp_server = mcp::start(
+            system_state.clone(),
+            database.clone(),
+            command_broker.clone(),
+        );
+        eprintln!(
+            "Cooling MCP listening on 127.0.0.1:8765/mcp; bearer token: {}",
+            mcp_server.token
+        );
         Self {
             selected_port: ports.first().cloned().unwrap_or_default(),
             ports,
@@ -494,6 +522,12 @@ impl CommutatorApp {
             started_at: Instant::now(),
             last_poll: Instant::now(),
             status: "Выберите порт и подключитесь.".to_owned(),
+            system_state,
+            database,
+            command_broker,
+            _mcp_server: mcp_server,
+            control_response: None,
+            probe_fan: 0,
         }
     }
 
@@ -520,6 +554,7 @@ impl CommutatorApp {
                 self.started_at = Instant::now();
                 self.status = format!("Подключено к {} (9600 бод).", self.selected_port);
                 self.port = Some(port);
+                self.queue_operator_command(serial::Command::GetControlConfig);
             }
             Err(error) => self.status = format!("Ошибка подключения: {error}"),
         }
@@ -530,6 +565,7 @@ impl CommutatorApp {
             return;
         }
         self.last_poll = Instant::now();
+        self.send_pending_command();
         let mut incoming = [0_u8; 1024];
         let read_result = self.port.as_mut().unwrap().read(&mut incoming);
         match read_result {
@@ -571,6 +607,66 @@ impl CommutatorApp {
     }
 
     fn process_data_byte(&mut self, data: u8) {
+        if let Some((command, payload)) = self.control_response.as_mut() {
+            if *command == 0xFF {
+                *command = data;
+                return;
+            }
+            payload.push(data);
+            let expected = if *command == 0x01 {
+                21
+            } else if *command == 0x10 {
+                18
+            } else {
+                1
+            };
+            if payload.len() == expected {
+                if *command == 0x10 && payload.len() == 18 && payload.last() == Some(&0x03) {
+                    let mut current = self.system_state.snapshot();
+                    current.stable_version = u16::from_be_bytes([payload[0], payload[1]]);
+                    let candidate = u16::from_be_bytes([payload[2], payload[3]]);
+                    current.candidate_version = (candidate != u16::MAX).then_some(candidate);
+                    current.kp_milli = u16::from_be_bytes([payload[4], payload[5]]);
+                    current.ki_milli = u16::from_be_bytes([payload[6], payload[7]]);
+                    current.kd_milli = u16::from_be_bytes([payload[8], payload[9]]);
+                    current.weights = [payload[10], payload[11], payload[12], payload[13]];
+                    current.door_policy = payload[14];
+                    current.limited_pwm = payload[15];
+                    current.target_c = payload[16];
+                    self.system_state.replace(current.clone());
+                    self.database.record_configuration(&current);
+                }
+                let status = payload.last().copied();
+                if let Some((decision_id, outcome)) = self
+                    .command_broker
+                    .lock()
+                    .expect("command broker lock poisoned")
+                    .finish(status)
+                {
+                    let label = match outcome {
+                        serial::CommandStatus::Applied => "applied",
+                        serial::CommandStatus::Rejected(_) => "rejected",
+                        serial::CommandStatus::Timeout => "timeout",
+                        serial::CommandStatus::Queued => "queued",
+                    };
+                    self.database.update_decision(&decision_id, label);
+                    self.status = format!("Команда {decision_id}: {label}");
+                }
+                self.control_response = None;
+            }
+            return;
+        }
+        if data == 0x12
+            && self
+                .command_broker
+                .lock()
+                .expect("command broker lock poisoned")
+                .begin_next()
+                .is_some()
+        {
+            self.control_response = Some((0xFF, Vec::new()));
+            return;
+        }
         if self.collector.is_temperature_permission(data) {
             self.collector.reset();
             println!("Board granted permission to send the reference temperature.");
@@ -579,6 +675,32 @@ impl CommutatorApp {
         }
         if let Some(payload) = self.collector.feed(data, Instant::now()) {
             if let Some(sample) = decode_telemetry(&payload) {
+                let state = SystemState {
+                    received_wall_clock_ms: database::wall_clock_ms(),
+                    inside_c: sample.inside_valid.then_some(sample.inside),
+                    outside_c: sample.outside_valid.then_some(sample.outside),
+                    inside_valid: sample.inside_valid,
+                    inside_fresh: sample.inside_fresh,
+                    outside_valid: sample.outside_valid,
+                    outside_fresh: sample.outside_fresh,
+                    target_c: sample.reference as u8,
+                    door_open: sample.door_open,
+                    door_stage: sample.door_stage,
+                    mode: sample.mode,
+                    door_policy: sample.door_policy,
+                    stable_version: sample.stable_version,
+                    candidate_version: sample.candidate_version,
+                    pwm: sample.pwm,
+                    rpm: sample.rpm,
+                    failed_mask: sample.failed_mask,
+                    ..Default::default()
+                };
+                self.system_state.replace(state.clone());
+                self.database.record_telemetry(
+                    (self.started_at.elapsed().as_secs_f64() * 1000.0) as i64,
+                    &payload,
+                    &state,
+                );
                 self.store
                     .add(self.started_at.elapsed().as_secs_f64(), sample);
                 let candidate = sample
@@ -630,6 +752,44 @@ impl CommutatorApp {
                 self.status = format!("Некорректный кадр телеметрии: {:02X?}", payload);
             }
         }
+    }
+
+    fn send_pending_command(&mut self) {
+        let Some(port) = self.port.as_mut() else {
+            return;
+        };
+        let next = self
+            .command_broker
+            .lock()
+            .expect("command broker lock poisoned")
+            .take_next_to_send();
+        let Some(next) = next else {
+            return;
+        };
+        let mut wire = encode_packet(BOARD_ADDR, 0x11);
+        for byte in next.command.actuator_bytes() {
+            wire.extend(encode_packet(BOARD_ADDR, byte));
+        }
+        if let Err(error) = port.write_all(&wire) {
+            let _ = self
+                .command_broker
+                .lock()
+                .expect("command broker lock poisoned")
+                .finish(Some(0xE3));
+            self.status = format!("Не удалось отправить команду: {error}");
+        }
+    }
+
+    fn queue_operator_command(&mut self, command: serial::Command) {
+        let decision_id = format!("operator-{}", database::wall_clock_ms());
+        let status = self
+            .command_broker
+            .lock()
+            .expect("command broker lock poisoned")
+            .submit(decision_id.clone(), command);
+        self.database
+            .remember_decision(&decision_id, "operator", "queued", "{}");
+        self.status = format!("Операторская команда {decision_id}: {:?}", status);
     }
 
     fn send_reference_temperature(&mut self) {
@@ -684,6 +844,20 @@ impl CommutatorApp {
 
 impl eframe::App for CommutatorApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        if let Some((decision_id, outcome)) = self
+            .command_broker
+            .lock()
+            .expect("command broker lock poisoned")
+            .expire(Instant::now())
+        {
+            let label = match outcome {
+                serial::CommandStatus::Timeout => "timeout",
+                serial::CommandStatus::Applied => "applied",
+                serial::CommandStatus::Rejected(_) => "rejected",
+                serial::CommandStatus::Queued => "queued",
+            };
+            self.database.update_decision(&decision_id, label);
+        }
         self.poll_serial();
         ctx.request_repaint_after(SERIAL_POLL_INTERVAL);
 
@@ -755,6 +929,54 @@ impl eframe::App for CommutatorApp {
                             .suffix(" °C"),
                     );
                     ui.label("Температура будет отправлена после разрешения платы.");
+                });
+                ui.horizontal_wrapped(|ui| {
+                    ui.label("Ручное безопасное управление:");
+                    if ui
+                        .add_enabled(self.port.is_some(), egui::Button::new("Снять emergency"))
+                        .clicked()
+                    {
+                        self.queue_operator_command(serial::Command::ClearEmergency);
+                    }
+                    ui.add_enabled(
+                        self.port.is_some(),
+                        egui::DragValue::new(&mut self.probe_fan)
+                            .range(0..=3)
+                            .prefix("Fan "),
+                    );
+                    if ui
+                        .add_enabled(self.port.is_some(), egui::Button::new("Probe fan"))
+                        .clicked()
+                    {
+                        self.queue_operator_command(serial::Command::ProbeFan {
+                            fan_index: self.probe_fan,
+                        });
+                    }
+                    let current = self.system_state.snapshot();
+                    if let Some(candidate_version) = current.candidate_version {
+                        if ui
+                            .add_enabled(
+                                self.port.is_some(),
+                                egui::Button::new("Confirm candidate"),
+                            )
+                            .clicked()
+                        {
+                            self.queue_operator_command(serial::Command::Confirm {
+                                candidate_version,
+                            });
+                        }
+                        if ui
+                            .add_enabled(
+                                self.port.is_some(),
+                                egui::Button::new("Rollback candidate"),
+                            )
+                            .clicked()
+                        {
+                            self.queue_operator_command(serial::Command::Rollback {
+                                candidate_version,
+                            });
+                        }
+                    }
                 });
                 ui.label(&self.status);
             });
