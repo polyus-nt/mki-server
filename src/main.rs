@@ -473,6 +473,8 @@ struct CommutatorApp {
     database: Database,
     command_broker: Arc<Mutex<CommandBroker>>,
     _mcp_server: mcp::McpServer,
+    mcp_token: String,
+    show_mcp_token: bool,
     control_response: Option<(u8, Vec<u8>)>,
     probe_fan: u8,
 }
@@ -507,10 +509,7 @@ impl CommutatorApp {
             database.clone(),
             command_broker.clone(),
         );
-        eprintln!(
-            "Cooling MCP listening on 127.0.0.1:8765/mcp; bearer token: {}",
-            mcp_server.token
-        );
+        let mcp_token = mcp_server.token.clone();
         Self {
             selected_port: ports.first().cloned().unwrap_or_default(),
             ports,
@@ -526,6 +525,8 @@ impl CommutatorApp {
             database,
             command_broker,
             _mcp_server: mcp_server,
+            mcp_token,
+            show_mcp_token: false,
             control_response: None,
             probe_fan: 0,
         }
@@ -975,6 +976,21 @@ impl eframe::App for CommutatorApp {
                             self.queue_operator_command(serial::Command::Rollback {
                                 candidate_version,
                             });
+                        }
+                    }
+                });
+                ui.horizontal_wrapped(|ui| {
+                    ui.label("MCP: http://127.0.0.1:8765/mcp");
+                    ui.checkbox(&mut self.show_mcp_token, "Показать bearer token");
+                    if self.show_mcp_token {
+                        ui.add(
+                            egui::TextEdit::singleline(&mut self.mcp_token)
+                                .desired_width(280.0)
+                                .interactive(false),
+                        );
+                        if ui.button("Копировать token").clicked() {
+                            ctx.copy_text(self.mcp_token.clone());
+                            self.status = "MCP bearer token скопирован.".to_owned();
                         }
                     }
                 });
