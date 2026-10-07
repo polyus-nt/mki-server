@@ -1,5 +1,9 @@
 # TJC Commutator — монитор SimpleBus
 
+Новая архитектура: [User/Admin API](docs/HARDWARE-API-ARCHITECTURE.md) и
+[человекочитаемый проект аппаратного протокола v1](docs/HARDWARE-PROTOCOL.md).
+Это контракт для следующей реализации; приложение ниже пока работает по прежнему протоколу.
+
 Продуктовое приложение — Rust-бинарник `tjc-commutator-v0-1-1`. Он является
 единственным владельцем COM-порта и отображает 29-байтовую телеметрию
 SimpleBus: valid/fresh температур, цель, дверь/stage, mode/policy,

@@ -1,0 +1,2011 @@
+{
+  "schema_version": 1,
+  "protocol_version": 1,
+  "status": "proposed",
+  "crc_check": {
+    "ascii": "123456789",
+    "hex": "29 B1"
+  },
+  "round_trips": [
+    {
+      "name": "temperature_positive",
+      "request": {
+        "version": 1,
+        "kind": 1,
+        "tx_id": 1,
+        "node": 13,
+        "command": 32,
+        "status": 0,
+        "idx": 0,
+        "data": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "response": {
+        "version": 1,
+        "kind": 2,
+        "tx_id": 1,
+        "node": 13,
+        "command": 32,
+        "status": 0,
+        "idx": 0,
+        "data": [
+          0,
+          0,
+          9,
+          246,
+          3,
+          0,
+          0,
+          0
+        ]
+      },
+      "request_hex": "A5 5A 01 01 00 01 0D 20 00 00 00 00 00 00 00 00 00 00 96 C2",
+      "response_hex": "A5 5A 01 02 00 01 0D 20 00 00 00 00 09 F6 03 00 00 00 54 0A",
+      "api_result": {
+        "ok": true,
+        "value": 25.5,
+        "unit": "degC",
+        "valid": true,
+        "fresh": true,
+        "age_ms": 0
+      }
+    },
+    {
+      "name": "temperature_negative",
+      "request": {
+        "version": 1,
+        "kind": 1,
+        "tx_id": 2,
+        "node": 13,
+        "command": 32,
+        "status": 0,
+        "idx": 1,
+        "data": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "response": {
+        "version": 1,
+        "kind": 2,
+        "tx_id": 2,
+        "node": 13,
+        "command": 32,
+        "status": 0,
+        "idx": 1,
+        "data": [
+          255,
+          255,
+          255,
+          231,
+          3,
+          0,
+          0,
+          0
+        ]
+      },
+      "request_hex": "A5 5A 01 01 00 02 0D 20 00 01 00 00 00 00 00 00 00 00 B2 44",
+      "response_hex": "A5 5A 01 02 00 02 0D 20 00 01 FF FF FF E7 03 00 00 00 F3 E4",
+      "api_result": {
+        "ok": true,
+        "value": -0.25,
+        "unit": "degC",
+        "valid": true,
+        "fresh": true,
+        "age_ms": 0
+      }
+    },
+    {
+      "name": "temperature_retained",
+      "request": {
+        "version": 1,
+        "kind": 1,
+        "tx_id": 3,
+        "node": 13,
+        "command": 32,
+        "status": 0,
+        "idx": 0,
+        "data": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "response": {
+        "version": 1,
+        "kind": 2,
+        "tx_id": 3,
+        "node": 13,
+        "command": 32,
+        "status": 0,
+        "idx": 0,
+        "data": [
+          0,
+          0,
+          8,
+          77,
+          1,
+          19,
+          136,
+          0
+        ]
+      },
+      "request_hex": "A5 5A 01 01 00 03 0D 20 00 00 00 00 00 00 00 00 00 00 1C 04",
+      "response_hex": "A5 5A 01 02 00 03 0D 20 00 00 00 00 08 4D 01 13 88 00 3C C7",
+      "api_result": {
+        "ok": true,
+        "value": 21.25,
+        "unit": "degC",
+        "valid": true,
+        "fresh": false,
+        "age_ms": 5000
+      }
+    },
+    {
+      "name": "temperature_age_saturated",
+      "request": {
+        "version": 1,
+        "kind": 1,
+        "tx_id": 4,
+        "node": 13,
+        "command": 32,
+        "status": 0,
+        "idx": 0,
+        "data": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "response": {
+        "version": 1,
+        "kind": 2,
+        "tx_id": 4,
+        "node": 13,
+        "command": 32,
+        "status": 0,
+        "idx": 0,
+        "data": [
+          0,
+          0,
+          8,
+          77,
+          1,
+          255,
+          254,
+          0
+        ]
+      },
+      "request_hex": "A5 5A 01 01 00 04 0D 20 00 00 00 00 00 00 00 00 00 00 D6 0C",
+      "response_hex": "A5 5A 01 02 00 04 0D 20 00 00 00 00 08 4D 01 FF FE 00 81 60",
+      "api_result": {
+        "ok": true,
+        "value": 21.25,
+        "unit": "degC",
+        "valid": true,
+        "fresh": false,
+        "age_ms": 65534
+      }
+    },
+    {
+      "name": "temperature_before_first_measurement",
+      "request": {
+        "version": 1,
+        "kind": 1,
+        "tx_id": 5,
+        "node": 13,
+        "command": 32,
+        "status": 0,
+        "idx": 0,
+        "data": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "response": {
+        "version": 1,
+        "kind": 2,
+        "tx_id": 5,
+        "node": 13,
+        "command": 32,
+        "status": 5,
+        "idx": 0,
+        "data": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "request_hex": "A5 5A 01 01 00 05 0D 20 00 00 00 00 00 00 00 00 00 00 93 6F",
+      "response_hex": "A5 5A 01 02 00 05 0D 20 05 00 00 00 00 00 00 00 00 00 B2 3A",
+      "api_result": {
+        "ok": false,
+        "error": {
+          "code": "SENSOR_UNAVAILABLE"
+        },
+        "value": null
+      }
+    },
+    {
+      "name": "voc_stub",
+      "request": {
+        "version": 1,
+        "kind": 1,
+        "tx_id": 6,
+        "node": 13,
+        "command": 33,
+        "status": 0,
+        "idx": 1,
+        "data": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "response": {
+        "version": 1,
+        "kind": 2,
+        "tx_id": 6,
+        "node": 13,
+        "command": 33,
+        "status": 4,
+        "idx": 1,
+        "data": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "request_hex": "A5 5A 01 01 00 06 0D 21 00 01 00 00 00 00 00 00 00 00 6F A0",
+      "response_hex": "A5 5A 01 02 00 06 0D 21 04 01 00 00 00 00 00 00 00 00 21 B0",
+      "api_result": {
+        "ok": false,
+        "error": {
+          "code": "NOT_IMPLEMENTED"
+        },
+        "value": null
+      }
+    },
+    {
+      "name": "door_closed",
+      "request": {
+        "version": 1,
+        "kind": 1,
+        "tx_id": 7,
+        "node": 13,
+        "command": 34,
+        "status": 0,
+        "idx": 0,
+        "data": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "response": {
+        "version": 1,
+        "kind": 2,
+        "tx_id": 7,
+        "node": 13,
+        "command": 34,
+        "status": 0,
+        "idx": 0,
+        "data": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "request_hex": "A5 5A 01 01 00 07 0D 22 00 00 00 00 00 00 00 00 00 00 B9 1A",
+      "response_hex": "A5 5A 01 02 00 07 0D 22 00 00 01 00 00 00 00 00 00 00 1D EC",
+      "api_result": {
+        "ok": true,
+        "value": true
+      }
+    },
+    {
+      "name": "door_open",
+      "request": {
+        "version": 1,
+        "kind": 1,
+        "tx_id": 8,
+        "node": 13,
+        "command": 34,
+        "status": 0,
+        "idx": 1,
+        "data": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "response": {
+        "version": 1,
+        "kind": 2,
+        "tx_id": 8,
+        "node": 13,
+        "command": 34,
+        "status": 0,
+        "idx": 1,
+        "data": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "request_hex": "A5 5A 01 01 00 08 0D 22 00 01 00 00 00 00 00 00 00 00 93 6B",
+      "response_hex": "A5 5A 01 02 00 08 0D 22 00 01 00 00 00 00 00 00 00 00 70 4E",
+      "api_result": {
+        "ok": true,
+        "value": false
+      }
+    },
+    {
+      "name": "pressure_stub",
+      "request": {
+        "version": 1,
+        "kind": 1,
+        "tx_id": 9,
+        "node": 13,
+        "command": 35,
+        "status": 0,
+        "idx": 2,
+        "data": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "response": {
+        "version": 1,
+        "kind": 2,
+        "tx_id": 9,
+        "node": 13,
+        "command": 35,
+        "status": 4,
+        "idx": 2,
+        "data": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "request_hex": "A5 5A 01 01 00 09 0D 23 00 02 00 00 00 00 00 00 00 00 23 05",
+      "response_hex": "A5 5A 01 02 00 09 0D 23 04 02 00 00 00 00 00 00 00 00 6D 15",
+      "api_result": {
+        "ok": false,
+        "error": {
+          "code": "NOT_IMPLEMENTED"
+        },
+        "value": null
+      }
+    },
+    {
+      "name": "pressure_encoding_example",
+      "request": {
+        "version": 1,
+        "kind": 1,
+        "tx_id": 10,
+        "node": 13,
+        "command": 35,
+        "status": 0,
+        "idx": 1,
+        "data": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "response": {
+        "version": 1,
+        "kind": 2,
+        "tx_id": 10,
+        "node": 13,
+        "command": 35,
+        "status": 0,
+        "idx": 1,
+        "data": [
+          0,
+          1,
+          139,
+          205,
+          3,
+          0,
+          0,
+          0
+        ]
+      },
+      "request_hex": "A5 5A 01 01 00 0A 0D 23 00 01 00 00 00 00 00 00 00 00 C1 E4",
+      "response_hex": "A5 5A 01 02 00 0A 0D 23 00 01 00 01 8B CD 03 00 00 00 04 3C",
+      "context": "codec-only synthetic value; current BMP280 stub cannot emit this response",
+      "api_result": {
+        "ok": true,
+        "value": 101325,
+        "unit": "Pa",
+        "valid": true,
+        "fresh": true,
+        "age_ms": 0
+      }
+    },
+    {
+      "name": "pwm_zero",
+      "request": {
+        "version": 1,
+        "kind": 1,
+        "tx_id": 11,
+        "node": 14,
+        "command": 48,
+        "status": 0,
+        "idx": 0,
+        "data": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "response": {
+        "version": 1,
+        "kind": 2,
+        "tx_id": 11,
+        "node": 14,
+        "command": 48,
+        "status": 0,
+        "idx": 0,
+        "data": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "request_hex": "A5 5A 01 01 00 0B 0E 30 00 00 00 00 00 00 00 00 00 00 47 FC",
+      "response_hex": "A5 5A 01 02 00 0B 0E 30 00 00 00 00 00 00 00 00 00 00 A4 D9",
+      "api_result": {
+        "ok": true,
+        "value": 0
+      }
+    },
+    {
+      "name": "pwm_maximum",
+      "request": {
+        "version": 1,
+        "kind": 1,
+        "tx_id": 12,
+        "node": 14,
+        "command": 48,
+        "status": 0,
+        "idx": 5,
+        "data": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "response": {
+        "version": 1,
+        "kind": 2,
+        "tx_id": 12,
+        "node": 14,
+        "command": 48,
+        "status": 0,
+        "idx": 5,
+        "data": [
+          255,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "request_hex": "A5 5A 01 01 00 0C 0E 30 00 05 00 00 00 00 00 00 00 00 FA 38",
+      "response_hex": "A5 5A 01 02 00 0C 0E 30 00 05 FF 00 00 00 00 00 00 00 8D 52",
+      "api_result": {
+        "ok": true,
+        "value": 255
+      }
+    },
+    {
+      "name": "rpm_bytes_03",
+      "request": {
+        "version": 1,
+        "kind": 1,
+        "tx_id": 13,
+        "node": 14,
+        "command": 49,
+        "status": 0,
+        "idx": 1,
+        "data": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "response": {
+        "version": 1,
+        "kind": 2,
+        "tx_id": 13,
+        "node": 14,
+        "command": 49,
+        "status": 0,
+        "idx": 1,
+        "data": [
+          0,
+          0,
+          3,
+          3,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "request_hex": "A5 5A 01 01 00 0D 0E 31 00 01 00 00 00 00 00 00 00 00 FB FD",
+      "response_hex": "A5 5A 01 02 00 0D 0E 31 00 01 00 00 03 03 00 00 00 00 38 EA",
+      "api_result": {
+        "ok": true,
+        "value": 771,
+        "unit": "rpm"
+      }
+    },
+    {
+      "name": "rpm_embedded_magic",
+      "request": {
+        "version": 1,
+        "kind": 1,
+        "tx_id": 14,
+        "node": 14,
+        "command": 49,
+        "status": 0,
+        "idx": 2,
+        "data": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "response": {
+        "version": 1,
+        "kind": 2,
+        "tx_id": 14,
+        "node": 14,
+        "command": 49,
+        "status": 0,
+        "idx": 2,
+        "data": [
+          0,
+          0,
+          165,
+          90,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "request_hex": "A5 5A 01 01 00 0E 0E 31 00 02 00 00 00 00 00 00 00 00 19 1C",
+      "response_hex": "A5 5A 01 02 00 0E 0E 31 00 02 00 00 A5 5A 00 00 00 00 0B 8C",
+      "api_result": {
+        "ok": true,
+        "value": 42330,
+        "unit": "rpm"
+      }
+    },
+    {
+      "name": "rpm_u32_maximum",
+      "request": {
+        "version": 1,
+        "kind": 1,
+        "tx_id": 15,
+        "node": 14,
+        "command": 49,
+        "status": 0,
+        "idx": 5,
+        "data": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "response": {
+        "version": 1,
+        "kind": 2,
+        "tx_id": 15,
+        "node": 14,
+        "command": 49,
+        "status": 0,
+        "idx": 5,
+        "data": [
+          255,
+          255,
+          255,
+          255,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "request_hex": "A5 5A 01 01 00 0F 0E 31 00 05 00 00 00 00 00 00 00 00 ED D4",
+      "response_hex": "A5 5A 01 02 00 0F 0E 31 00 05 FF FF FF FF 00 00 00 00 31 DF",
+      "context": "codec-only boundary, not a physical fan claim",
+      "api_result": {
+        "ok": true,
+        "value": 4294967295,
+        "unit": "rpm"
+      }
+    },
+    {
+      "name": "set_pwm_normal",
+      "request": {
+        "version": 1,
+        "kind": 1,
+        "tx_id": 16,
+        "node": 14,
+        "command": 50,
+        "status": 0,
+        "idx": 2,
+        "data": [
+          100,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "response": {
+        "version": 1,
+        "kind": 2,
+        "tx_id": 16,
+        "node": 14,
+        "command": 50,
+        "status": 0,
+        "idx": 2,
+        "data": [
+          100,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "request_hex": "A5 5A 01 01 00 10 0E 32 00 02 64 00 00 00 00 00 00 00 71 B6",
+      "response_hex": "A5 5A 01 02 00 10 0E 32 00 02 64 00 00 00 00 00 00 00 92 93",
+      "api_result": {
+        "ok": true,
+        "applied_pwm": 100
+      }
+    },
+    {
+      "name": "set_pwm_fault_mode_2",
+      "request": {
+        "version": 1,
+        "kind": 1,
+        "tx_id": 17,
+        "node": 14,
+        "command": 50,
+        "status": 0,
+        "idx": 4,
+        "data": [
+          100,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "response": {
+        "version": 1,
+        "kind": 2,
+        "tx_id": 17,
+        "node": 14,
+        "command": 50,
+        "status": 0,
+        "idx": 4,
+        "data": [
+          230,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "request_hex": "A5 5A 01 01 00 11 0E 32 00 04 64 00 00 00 00 00 00 00 6E 5D",
+      "response_hex": "A5 5A 01 02 00 11 0E 32 00 04 E6 00 00 00 00 00 00 00 FF 5F",
+      "context": "fixture RNG selects 230; only fan 4 is in mode 2",
+      "api_result": {
+        "ok": true,
+        "applied_pwm": 230
+      }
+    },
+    {
+      "name": "get_mode_normal",
+      "request": {
+        "version": 1,
+        "kind": 1,
+        "tx_id": 18,
+        "node": 14,
+        "command": 64,
+        "status": 0,
+        "idx": 255,
+        "data": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "response": {
+        "version": 1,
+        "kind": 2,
+        "tx_id": 18,
+        "node": 14,
+        "command": 64,
+        "status": 0,
+        "idx": 255,
+        "data": [
+          0,
+          255,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "request_hex": "A5 5A 01 01 00 12 0E 40 00 FF 00 00 00 00 00 00 00 00 28 DE",
+      "response_hex": "A5 5A 01 02 00 12 0E 40 00 FF 00 FF 00 00 00 00 00 00 6E 8A",
+      "api_result": {
+        "ok": true,
+        "mode": 0,
+        "idx": null
+      }
+    },
+    {
+      "name": "get_mode_periodic",
+      "request": {
+        "version": 1,
+        "kind": 1,
+        "tx_id": 19,
+        "node": 14,
+        "command": 64,
+        "status": 0,
+        "idx": 255,
+        "data": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "response": {
+        "version": 1,
+        "kind": 2,
+        "tx_id": 19,
+        "node": 14,
+        "command": 64,
+        "status": 0,
+        "idx": 255,
+        "data": [
+          1,
+          2,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "request_hex": "A5 5A 01 01 00 13 0E 40 00 FF 00 00 00 00 00 00 00 00 6D BD",
+      "response_hex": "A5 5A 01 02 00 13 0E 40 00 FF 01 02 00 00 00 00 00 00 A9 A8",
+      "api_result": {
+        "ok": true,
+        "mode": 1,
+        "idx": 2
+      }
+    },
+    {
+      "name": "set_mode_periodic",
+      "request": {
+        "version": 1,
+        "kind": 1,
+        "tx_id": 20,
+        "node": 14,
+        "command": 65,
+        "status": 0,
+        "idx": 2,
+        "data": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "response": {
+        "version": 1,
+        "kind": 2,
+        "tx_id": 20,
+        "node": 14,
+        "command": 65,
+        "status": 0,
+        "idx": 2,
+        "data": [
+          1,
+          2,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "request_hex": "A5 5A 01 01 00 14 0E 41 00 02 01 00 00 00 00 00 00 00 72 75",
+      "response_hex": "A5 5A 01 02 00 14 0E 41 00 02 01 02 00 00 00 00 00 00 F1 B3",
+      "api_result": {
+        "ok": true,
+        "mode": 1,
+        "idx": 2
+      }
+    },
+    {
+      "name": "set_mode_distort_commands",
+      "request": {
+        "version": 1,
+        "kind": 1,
+        "tx_id": 21,
+        "node": 14,
+        "command": 65,
+        "status": 0,
+        "idx": 4,
+        "data": [
+          2,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "response": {
+        "version": 1,
+        "kind": 2,
+        "tx_id": 21,
+        "node": 14,
+        "command": 65,
+        "status": 0,
+        "idx": 4,
+        "data": [
+          2,
+          4,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "request_hex": "A5 5A 01 01 00 15 0E 41 00 04 02 00 00 00 00 00 00 00 A5 EB",
+      "response_hex": "A5 5A 01 02 00 15 0E 41 00 04 02 04 00 00 00 00 00 00 87 08",
+      "api_result": {
+        "ok": true,
+        "mode": 2,
+        "idx": 4
+      }
+    },
+    {
+      "name": "set_mode_off_preserves_pwm",
+      "request": {
+        "version": 1,
+        "kind": 1,
+        "tx_id": 22,
+        "node": 14,
+        "command": 65,
+        "status": 0,
+        "idx": 4,
+        "data": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "response": {
+        "version": 1,
+        "kind": 2,
+        "tx_id": 22,
+        "node": 14,
+        "command": 65,
+        "status": 0,
+        "idx": 4,
+        "data": [
+          0,
+          255,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "request_hex": "A5 5A 01 01 00 16 0E 41 00 04 00 00 00 00 00 00 00 00 E5 E8",
+      "response_hex": "A5 5A 01 02 00 16 0E 41 00 04 00 FF 00 00 00 00 00 00 A3 BC",
+      "api_result": {
+        "ok": true,
+        "mode": 0,
+        "idx": null
+      }
+    },
+    {
+      "name": "lock_door_0",
+      "request": {
+        "version": 1,
+        "kind": 1,
+        "tx_id": 23,
+        "node": 14,
+        "command": 66,
+        "status": 0,
+        "idx": 0,
+        "data": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "response": {
+        "version": 1,
+        "kind": 2,
+        "tx_id": 23,
+        "node": 14,
+        "command": 66,
+        "status": 0,
+        "idx": 0,
+        "data": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "request_hex": "A5 5A 01 01 00 17 0E 42 00 00 01 00 00 00 00 00 00 00 03 4D",
+      "response_hex": "A5 5A 01 02 00 17 0E 42 00 00 01 00 00 00 00 00 00 00 E0 68",
+      "api_result": {
+        "ok": true,
+        "applied_lock_state": true
+      }
+    },
+    {
+      "name": "unlock_door_1",
+      "request": {
+        "version": 1,
+        "kind": 1,
+        "tx_id": 24,
+        "node": 14,
+        "command": 66,
+        "status": 0,
+        "idx": 1,
+        "data": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "response": {
+        "version": 1,
+        "kind": 2,
+        "tx_id": 24,
+        "node": 14,
+        "command": 66,
+        "status": 0,
+        "idx": 1,
+        "data": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "request_hex": "A5 5A 01 01 00 18 0E 42 00 01 00 00 00 00 00 00 00 00 6E EF",
+      "response_hex": "A5 5A 01 02 00 18 0E 42 00 01 00 00 00 00 00 00 00 00 8D CA",
+      "api_result": {
+        "ok": true,
+        "applied_lock_state": false
+      }
+    },
+    {
+      "name": "invalid_fan_index",
+      "request": {
+        "version": 1,
+        "kind": 1,
+        "tx_id": 25,
+        "node": 14,
+        "command": 49,
+        "status": 0,
+        "idx": 6,
+        "data": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "response": {
+        "version": 1,
+        "kind": 2,
+        "tx_id": 25,
+        "node": 14,
+        "command": 49,
+        "status": 1,
+        "idx": 6,
+        "data": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "request_hex": "A5 5A 01 01 00 19 0E 31 00 06 00 00 00 00 00 00 00 00 59 4F",
+      "response_hex": "A5 5A 01 02 00 19 0E 31 01 06 00 00 00 00 00 00 00 00 D5 2F",
+      "api_result": {
+        "ok": false,
+        "error": {
+          "code": "INVALID_INDEX"
+        }
+      }
+    },
+    {
+      "name": "invalid_door_index",
+      "request": {
+        "version": 1,
+        "kind": 1,
+        "tx_id": 26,
+        "node": 13,
+        "command": 34,
+        "status": 0,
+        "idx": 2,
+        "data": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "response": {
+        "version": 1,
+        "kind": 2,
+        "tx_id": 26,
+        "node": 13,
+        "command": 34,
+        "status": 1,
+        "idx": 2,
+        "data": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "request_hex": "A5 5A 01 01 00 1A 0D 22 00 02 00 00 00 00 00 00 00 00 22 5D",
+      "response_hex": "A5 5A 01 02 00 1A 0D 22 01 02 00 00 00 00 00 00 00 00 AE 3D",
+      "api_result": {
+        "ok": false,
+        "error": {
+          "code": "INVALID_INDEX"
+        }
+      }
+    },
+    {
+      "name": "invalid_lock_bool",
+      "request": {
+        "version": 1,
+        "kind": 1,
+        "tx_id": 27,
+        "node": 14,
+        "command": 66,
+        "status": 0,
+        "idx": 1,
+        "data": [
+          2,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "response": {
+        "version": 1,
+        "kind": 2,
+        "tx_id": 27,
+        "node": 14,
+        "command": 66,
+        "status": 2,
+        "idx": 1,
+        "data": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "request_hex": "A5 5A 01 01 00 1B 0E 42 00 01 02 00 00 00 00 00 00 00 2E EC",
+      "response_hex": "A5 5A 01 02 00 1B 0E 42 02 01 00 00 00 00 00 00 00 00 9C E5",
+      "api_result": {
+        "ok": false,
+        "error": {
+          "code": "INVALID_ARGUMENT"
+        }
+      }
+    },
+    {
+      "name": "invalid_mode",
+      "request": {
+        "version": 1,
+        "kind": 1,
+        "tx_id": 28,
+        "node": 14,
+        "command": 65,
+        "status": 0,
+        "idx": 2,
+        "data": [
+          3,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "response": {
+        "version": 1,
+        "kind": 2,
+        "tx_id": 28,
+        "node": 14,
+        "command": 65,
+        "status": 2,
+        "idx": 2,
+        "data": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "request_hex": "A5 5A 01 01 00 1C 0E 41 00 02 03 00 00 00 00 00 00 00 F6 89",
+      "response_hex": "A5 5A 01 02 00 1C 0E 41 02 02 00 00 00 00 00 00 00 00 03 53",
+      "api_result": {
+        "ok": false,
+        "error": {
+          "code": "INVALID_ARGUMENT"
+        }
+      }
+    },
+    {
+      "name": "command_node_mismatch",
+      "request": {
+        "version": 1,
+        "kind": 1,
+        "tx_id": 29,
+        "node": 13,
+        "command": 48,
+        "status": 0,
+        "idx": 0,
+        "data": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "response": {
+        "version": 1,
+        "kind": 2,
+        "tx_id": 29,
+        "node": 13,
+        "command": 48,
+        "status": 11,
+        "idx": 0,
+        "data": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "request_hex": "A5 5A 01 01 00 1D 0D 30 00 00 00 00 00 00 00 00 00 00 DB BC",
+      "response_hex": "A5 5A 01 02 00 1D 0D 30 0B 00 00 00 00 00 00 00 00 00 C3 1D",
+      "api_result": {
+        "ok": false,
+        "error": {
+          "code": "INVALID_NODE"
+        }
+      }
+    },
+    {
+      "name": "unknown_command",
+      "request": {
+        "version": 1,
+        "kind": 1,
+        "tx_id": 30,
+        "node": 14,
+        "command": 255,
+        "status": 0,
+        "idx": 0,
+        "data": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "response": {
+        "version": 1,
+        "kind": 2,
+        "tx_id": 30,
+        "node": 14,
+        "command": 255,
+        "status": 3,
+        "idx": 0,
+        "data": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "request_hex": "A5 5A 01 01 00 1E 0E FF 00 00 00 00 00 00 00 00 00 00 57 CA",
+      "response_hex": "A5 5A 01 02 00 1E 0E FF 03 00 00 00 00 00 00 00 00 00 05 20",
+      "api_result": {
+        "ok": false,
+        "error": {
+          "code": "UNKNOWN_COMMAND"
+        }
+      }
+    },
+    {
+      "name": "nonzero_reserved_request_data",
+      "request": {
+        "version": 1,
+        "kind": 1,
+        "tx_id": 31,
+        "node": 14,
+        "command": 48,
+        "status": 0,
+        "idx": 0,
+        "data": [
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "response": {
+        "version": 1,
+        "kind": 2,
+        "tx_id": 31,
+        "node": 14,
+        "command": 48,
+        "status": 2,
+        "idx": 0,
+        "data": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "request_hex": "A5 5A 01 01 00 1F 0E 30 00 00 00 01 00 00 00 00 00 00 EC 84",
+      "response_hex": "A5 5A 01 02 00 1F 0E 30 02 00 00 00 00 00 00 00 00 00 69 4A",
+      "api_result": {
+        "ok": false,
+        "error": {
+          "code": "INVALID_ARGUMENT"
+        }
+      }
+    },
+    {
+      "name": "unsupported_version",
+      "request": {
+        "version": 2,
+        "kind": 1,
+        "tx_id": 32,
+        "node": 14,
+        "command": 48,
+        "status": 0,
+        "idx": 0,
+        "data": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "response": {
+        "version": 1,
+        "kind": 2,
+        "tx_id": 32,
+        "node": 14,
+        "command": 48,
+        "status": 8,
+        "idx": 0,
+        "data": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "request_hex": "A5 5A 02 01 00 20 0E 30 00 00 00 00 00 00 00 00 00 00 46 26",
+      "response_hex": "A5 5A 01 02 00 20 0E 30 08 00 00 00 00 00 00 00 00 00 07 05",
+      "api_result": {
+        "ok": false,
+        "error": {
+          "code": "UNSUPPORTED_VERSION"
+        }
+      }
+    },
+    {
+      "name": "nonzero_request_status",
+      "request": {
+        "version": 1,
+        "kind": 1,
+        "tx_id": 33,
+        "node": 14,
+        "command": 48,
+        "status": 1,
+        "idx": 0,
+        "data": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "response": {
+        "version": 1,
+        "kind": 2,
+        "tx_id": 33,
+        "node": 14,
+        "command": 48,
+        "status": 2,
+        "idx": 0,
+        "data": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "request_hex": "A5 5A 01 01 00 21 0E 30 01 00 00 00 00 00 00 00 00 00 84 4D",
+      "response_hex": "A5 5A 01 02 00 21 0E 30 02 00 00 00 00 00 00 00 00 00 D6 A7",
+      "api_result": {
+        "ok": false,
+        "error": {
+          "code": "INVALID_ARGUMENT"
+        }
+      }
+    },
+    {
+      "name": "downstream_timeout_mutation",
+      "request": {
+        "version": 1,
+        "kind": 1,
+        "tx_id": 34,
+        "node": 14,
+        "command": 50,
+        "status": 0,
+        "idx": 4,
+        "data": [
+          100,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "response": {
+        "version": 1,
+        "kind": 2,
+        "tx_id": 34,
+        "node": 14,
+        "command": 50,
+        "status": 7,
+        "idx": 4,
+        "data": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "request_hex": "A5 5A 01 01 00 22 0E 32 00 04 64 00 00 00 00 00 00 00 9A 24",
+      "response_hex": "A5 5A 01 02 00 22 0E 32 07 04 00 00 00 00 00 00 00 00 E7 2E",
+      "origin": "gateway or hub",
+      "api_result": {
+        "ok": false,
+        "error": {
+          "code": "DEVICE_TIMEOUT",
+          "outcome": "unknown"
+        }
+      }
+    },
+    {
+      "name": "downstream_overflow_mutation",
+      "request": {
+        "version": 1,
+        "kind": 1,
+        "tx_id": 35,
+        "node": 14,
+        "command": 50,
+        "status": 0,
+        "idx": 4,
+        "data": [
+          100,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "response": {
+        "version": 1,
+        "kind": 2,
+        "tx_id": 35,
+        "node": 14,
+        "command": 50,
+        "status": 12,
+        "idx": 4,
+        "data": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "request_hex": "A5 5A 01 01 00 23 0E 32 00 04 64 00 00 00 00 00 00 00 DF 47",
+      "response_hex": "A5 5A 01 02 00 23 0E 32 0C 04 00 00 00 00 00 00 00 00 59 C9",
+      "origin": "gateway or hub",
+      "api_result": {
+        "ok": false,
+        "error": {
+          "code": "TRANSPORT_OVERFLOW",
+          "outcome": "unknown"
+        }
+      }
+    }
+  ],
+  "negative_frames": [
+    {
+      "name": "corrupted_request_crc",
+      "input_hex": "A5 5A 01 01 00 10 0E 32 00 02 65 00 00 00 00 00 00 00 71 B6",
+      "expected": "drop_without_execution_or_response",
+      "matches_request_case": "set_pwm_normal"
+    },
+    {
+      "name": "truncated_request",
+      "input_hex": "A5 5A 01 01 00 10 0E 32 00 02 64",
+      "advance_ms": 251,
+      "expected": "discard_partial_candidate",
+      "matches_request_case": "set_pwm_normal"
+    },
+    {
+      "name": "unsupported_kind",
+      "input_hex": "A5 5A 01 03 00 10 0E 32 00 02 64 00 00 00 00 00 00 00 3C 6F",
+      "expected": "drop_without_execution_or_response"
+    },
+    {
+      "name": "late_response_id",
+      "input_hex": "A5 5A 01 02 00 0F 0E 32 00 02 64 00 00 00 00 00 00 00 45 75",
+      "pending_request": {
+        "version": 1,
+        "kind": 1,
+        "tx_id": 16,
+        "node": 14,
+        "command": 50,
+        "status": 0,
+        "idx": 2,
+        "data": [
+          100,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "expected": "ignore_without_finishing_pending_request"
+    },
+    {
+      "name": "mismatched_response_command",
+      "input_hex": "A5 5A 01 02 00 10 0E 30 00 02 64 00 00 00 00 00 00 00 32 20",
+      "pending_request": {
+        "version": 1,
+        "kind": 1,
+        "tx_id": 16,
+        "node": 14,
+        "command": 50,
+        "status": 0,
+        "idx": 2,
+        "data": [
+          100,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "expected": "ignore_without_finishing_pending_request"
+    },
+    {
+      "name": "invalid_response_flags",
+      "input_hex": "A5 5A 01 02 00 03 0D 20 00 00 00 00 08 4D 02 13 88 00 A7 1B",
+      "pending_request": {
+        "version": 1,
+        "kind": 1,
+        "tx_id": 3,
+        "node": 13,
+        "command": 32,
+        "status": 0,
+        "idx": 0,
+        "data": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "expected": "reject_semantically_invalid_response"
+    },
+    {
+      "name": "recovery_after_lost_byte",
+      "input_hex": "A5 5A 01 01 00 10 0E 32 00 02 64 00 00 00 00 00 00 71 B6 A5 5A 01 01 00 01 0D 20 00 00 00 00 00 00 00 00 00 00 96 C2",
+      "expected_valid_frames": [
+        "A5 5A 01 01 00 01 0D 20 00 00 00 00 00 00 00 00 00 00 96 C2"
+      ],
+      "expected": "recover_next_complete_crc_valid_frame"
+    }
+  ],
+  "serial_envelopes": [
+    {
+      "name": "pc_to_hub_payload_CR",
+      "destination": 12,
+      "data": 13,
+      "hex": "0D 30 43 0D 0A"
+    },
+    {
+      "name": "hub_to_sensor_magic_A5",
+      "destination": 13,
+      "data": 165,
+      "hex": "0D 30 44 A5 0A"
+    },
+    {
+      "name": "hub_to_actuator_payload_LF",
+      "destination": 14,
+      "data": 10,
+      "hex": "0D 30 45 0A 0A"
+    },
+    {
+      "name": "hub_to_pc_payload_OK_byte",
+      "destination": 99,
+      "data": 3,
+      "hex": "0D 36 33 03 0A"
+    }
+  ],
+  "mode_sequence": [
+    {
+      "time_ms": 0,
+      "action": "boot",
+      "expected": {
+        "mode": 0,
+        "idx": null,
+        "pwm": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "locks": [
+          false,
+          false
+        ]
+      }
+    },
+    {
+      "time_ms": 0,
+      "action": "set_pwm",
+      "idx": 2,
+      "pwm": 100,
+      "expected": {
+        "mode": 0,
+        "idx": null,
+        "fan_pwm": 100
+      }
+    },
+    {
+      "time_ms": 0,
+      "action": "set_mode",
+      "idx": 2,
+      "mode": 1,
+      "rng_value": 230,
+      "expected": {
+        "mode": 1,
+        "idx": 2,
+        "fan_pwm": 230,
+        "next_tick_ms": 30000
+      }
+    },
+    {
+      "time_ms": 10000,
+      "action": "set_pwm",
+      "idx": 2,
+      "pwm": 100,
+      "expected": {
+        "mode": 1,
+        "idx": 2,
+        "fan_pwm": 100,
+        "next_tick_ms": 30000
+      }
+    },
+    {
+      "time_ms": 20000,
+      "action": "set_mode",
+      "idx": 2,
+      "mode": 1,
+      "expected": {
+        "mode": 1,
+        "idx": 2,
+        "fan_pwm": 100,
+        "next_tick_ms": 30000,
+        "rng_consumed": false
+      }
+    },
+    {
+      "time_ms": 30000,
+      "action": "tick",
+      "rng_value": 17,
+      "expected": {
+        "mode": 1,
+        "idx": 2,
+        "fan_pwm": 17,
+        "next_tick_ms": 60000
+      }
+    },
+    {
+      "time_ms": 35000,
+      "action": "disconnect",
+      "expected": {
+        "mode": 1,
+        "idx": 2,
+        "fan_pwm": 17,
+        "next_tick_ms": 60000
+      }
+    },
+    {
+      "time_ms": 60000,
+      "action": "tick",
+      "rng_value": 255,
+      "expected": {
+        "mode": 1,
+        "idx": 2,
+        "fan_pwm": 255,
+        "next_tick_ms": 90000
+      }
+    },
+    {
+      "time_ms": 65000,
+      "action": "set_mode",
+      "idx": 4,
+      "mode": 2,
+      "expected": {
+        "mode": 2,
+        "idx": 4,
+        "pwm": [
+          0,
+          0,
+          255,
+          0,
+          0,
+          0
+        ],
+        "rng_consumed": false
+      }
+    },
+    {
+      "time_ms": 65500,
+      "action": "set_pwm",
+      "idx": 4,
+      "pwm": 100,
+      "rng_value": 230,
+      "expected": {
+        "mode": 2,
+        "idx": 4,
+        "fan_pwm": 230
+      }
+    },
+    {
+      "time_ms": 66000,
+      "action": "set_mode",
+      "idx": 0,
+      "mode": 0,
+      "expected": {
+        "mode": 0,
+        "idx": null,
+        "pwm": [
+          0,
+          0,
+          255,
+          0,
+          230,
+          0
+        ]
+      }
+    },
+    {
+      "time_ms": 67000,
+      "action": "set_pwm",
+      "idx": 4,
+      "pwm": 100,
+      "expected": {
+        "mode": 0,
+        "idx": null,
+        "fan_pwm": 100
+      }
+    }
+  ]
+}
