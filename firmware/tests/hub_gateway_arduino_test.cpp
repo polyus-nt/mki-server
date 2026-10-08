@@ -39,6 +39,9 @@ struct TestSensors : SensorHardware {
     return OK;
   }
   Status door(uint8_t idx, bool& closed) override { closed = idx == 0; return OK; }
+  Status dust(uint8_t, Measurement& result) override {
+    result.value=(512UL<<16)|2502;result.flags=3;result.ageMs=0;return OK;
+  }
   Status unsupported(uint8_t, uint8_t) override { return NOT_IMPLEMENTED; }
 };
 
@@ -50,6 +53,7 @@ static void bus(Hub& hub, const Frame& frame, uint32_t& now) {
 static Frame command(uint16_t id, uint8_t code, uint8_t idx, uint8_t value = 0) {
   Frame frame = {};
   frame.version = kVersion; frame.kind = kRequest; frame.tx_id = id;
+  frame.session_id = UINT64_C(0xA55A0D0A12345678);
   frame.node = kActuatorNode; frame.command = code;
   frame.idx = idx; frame.data[0] = value;
   return frame;
@@ -131,7 +135,7 @@ int main() {
     request.node = kSensorsNode;
     reply = exchange(hub, sensorGateway, arduino, request, now, false, &sensors);
     if (commands[i] == kGetDust) {
-      assert(reply.status == NOT_IMPLEMENTED && zeros(reply.data, 8));
+      assert(reply.status == OK && readU16(reply.data)==512 && readU16(reply.data+2)==2502);
     } else {
       assert(reply.status == OK);
       if (commands[i] == kGetDoor) assert(reply.data[0] == values[i]);

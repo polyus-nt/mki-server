@@ -33,7 +33,7 @@ struct App {
 impl App {
     fn new() -> Self {
         let database = database::Database::open("tjc-commutator.sqlite").expect("open database");
-        let broker = Arc::new(Mutex::new(CommandBroker::default()));
+        let broker = Arc::new(Mutex::new(CommandBroker::with_database(database.clone())));
         let state = SharedState::default();
         let runtime = SerialRuntime::start(broker.clone(), state.clone(), database.clone());
         let server = mcp::start(state.clone(), database, UserApi::new(broker.clone()));
@@ -45,7 +45,7 @@ impl App {
             state,
             ports,
             port,
-            status: "Выберите порт. Прошивки должны использовать Hardware API v1.".into(),
+            status: "Выберите порт. Прошивки должны использовать Hardware API v2.".into(),
             token: server.token,
             show_token: false,
             fan: 0,
@@ -82,7 +82,11 @@ impl App {
                     .or_else(|| v.get("applied_pwm"))
                     .cloned()
                     .unwrap_or(Value::Null);
-                let mut text = format!("{} {}", value, v["unit"].as_str().unwrap_or(""));
+                let mut text = if v.get("adc").is_some() {
+                    format!("ADC {}; {} V", v["adc"], v["voltage"])
+                } else {
+                    format!("{} {}", value, v["unit"].as_str().unwrap_or(""))
+                };
                 let received = v["received_wall_clock_ms"].as_i64().unwrap_or(0);
                 let local = (database::wall_clock_ms() - received).max(0) as u64;
                 text.push_str(&format!("; кэш +{local} мс"));
@@ -182,7 +186,7 @@ impl eframe::App for App {
             ui.label(&self.status);
             let (waiting, decisions, ids) = self.broker.lock().unwrap().metrics();
             ui.label(format!(
-                "Очередь: {waiting}/64; решения: {decisions}/4096; свободно tx_id: {ids}"
+                "Очередь: {waiting}/64; кэш решений: {decisions}/4096; до смены сессии: {ids}"
             ));
         });
         egui::CentralPanel::default().show(ctx, |ui| {
@@ -213,6 +217,9 @@ impl eframe::App for App {
                     }
                 });
                 ui.separator();
+                for i in 0..2 {
+                    ui.label(format!("GP2Y1010AU0F {i}: {} (без концентрации)", Self::sample(&state.dust[i])));
+                }
                 ui.heading("Шесть вентиляторов");
                 Plot::new("rpm").height(180.0).legend(Legend::default()).show(ui, |plot| {
                     for i in 0..6 {
@@ -249,7 +256,7 @@ impl eframe::App for App {
                         if ui.button("Прочитать режим").clicked() { self.submit(Command::GetMode); }
                     });
                 });
-                ui.label(RichText::new("Пыль, замки и пылесос пока не подключены к серверному API. Ошибки/тайм-ауты не вызывают повтор управляющей команды.").weak());
+                ui.label(RichText::new("Пыль: ADC и напряжение без калибровки концентрации. Замки и пылесос ещё не подключены. Ошибки/тайм-ауты не вызывают повтор управляющей команды.").weak());
             });
         });
     }

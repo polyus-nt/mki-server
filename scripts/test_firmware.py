@@ -24,6 +24,7 @@ def main():
         ROOT.parent / "arduino-sensor/test/hardware_api_test.cpp",
         ROOT.parent / "arduino-sensor/test/bmp280_test.cpp",
         ROOT.parent / "arduino-sensor/test/dht11_test.cpp",
+        ROOT.parent / "arduino-sensor/test/dust_test.cpp",
         ROOT.parent / "arduino-sensor/test/dht_gpio_test.cpp",
         ROOT.parent / "arduino-sensor/test/voc_sensor_test.cpp",
         ROOT.parent / "arduino-sensor/test/sensor_board_test.cpp",
@@ -56,7 +57,7 @@ def main():
             if source.name == "dht_gpio_test.cpp":
                 extra = ["-I" + str(source.parent / "mock"),
                          str(source.parents[1] / "src/dht/DHT.cpp")]
-            if source.name in ("voc_sensor_test.cpp", "sensor_board_test.cpp"):
+            if source.name in ("voc_sensor_test.cpp", "sensor_board_test.cpp", "dust_test.cpp"):
                 c_compiler = shutil.which("gcc")
                 if not c_compiler:
                     raise SystemExit("gcc is required for the Sensirion C algorithm")
@@ -69,8 +70,17 @@ def main():
             if source.name == "sensor_board_test.cpp":
                 extra += ["-I" + str(source.parent / "mock"),
                           '-DHARDWARE_API_BOARD_HEADER="test/compile_only_sensors.h"']
+            if source.name == "dust_test.cpp":
+                extra += ["-I" + str(source.parent / "mock"),
+                          '-DHARDWARE_API_BOARD_HEADER="test/compile_only_dust.h"']
             subprocess.run([compiler, *flags, *extra, str(source), "-o", binary], check=True)
             subprocess.run([binary], check=True, env=environment)
+            if source.name == "dust_test.cpp":
+                conflict = [arg for arg in extra if not arg.startswith("-DHARDWARE_API_BOARD_HEADER")]
+                subprocess.run([compiler, *flags, *conflict,
+                                '-DHARDWARE_API_BOARD_HEADER="test/conflicting_dust.h"',
+                                "-DTEST_DUST_CONFLICT", str(source), "-o", binary + "-conflict"], check=True)
+                subprocess.run([binary + "-conflict"], check=True, env=environment)
             if source.name == "sensor_board_test.cpp":
                 conflict_binary = binary + "-conflict"
                 conflict_extra = [arg for arg in extra if not arg.startswith("-DHARDWARE_API_BOARD_HEADER")]
@@ -96,7 +106,7 @@ def main():
                                     *variant_flags, str(source), "-o", variant_binary], check=True)
                     subprocess.run([variant_binary], check=True, env=environment)
             binaries.append(binary)
-        vectors = json.loads((ROOT / "docs/protocol/hardware-v1-vectors.json").read_text())
+        vectors = json.loads((ROOT / "docs/protocol/hardware-v2-vectors.json").read_text())
         for case in vectors["round_trips"]:
             subprocess.run([binaries[0], case["request_hex"], case["response_hex"]],
                            check=True, env=environment)

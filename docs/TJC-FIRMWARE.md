@@ -56,7 +56,7 @@ Linker script размещает USERCODE с адреса `0x08003800`, а Syste
 
 Источники: [SimpleBus.hpp](https://github.com/kruzhok-team/lapki-compiler/blob/c0e235f364f21b1a7ba8dbb598ef0bc983511af6/compiler/library/tjc-ms1-main-a4/1.0/source/SimpleBus.hpp), [ArduinoAdapter.hpp](https://github.com/kruzhok-team/lapki-compiler/blob/c0e235f364f21b1a7ba8dbb598ef0bc983511af6/compiler/library/tjc-ms1-ard-a1/1.0/source/ArduinoAdapter.hpp).
 
-Интерфейсы передают отдельные байты; поверх них реализован [20-байтовый Hardware API v1](HARDWARE-PROTOCOL.md). Хаб использует одну USART1/SimpleBus-линию для компьютера и шлюзов, маршруты 12/13/14/99, один активный обмен и ограниченное восстановление.
+Интерфейсы передают отдельные байты; поверх них реализован [28-байтовый Hardware API v2](HARDWARE-PROTOCOL.md). Хаб использует одну USART1/SimpleBus-линию для компьютера и шлюзов, маршруты 12/13/14/99, один активный обмен и ограниченное восстановление.
 
 В заголовках upstream есть определения функций, глобальных переменных и обработчиков прерываний. При разделении нашей прошивки на несколько единиц трансляции нужно проверить повторные определения; простое включение всех этих заголовков в каждый `.cpp` не является готовой схемой сборки.
 

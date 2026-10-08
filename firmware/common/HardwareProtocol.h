@@ -1,14 +1,14 @@
 #pragma once
-#ifndef HARDWARE_API_PROTOCOL_V1_H
-#define HARDWARE_API_PROTOCOL_V1_H
-// Hardware API v1 draft codec. No Arduino dependencies; all integers are big-endian.
+#ifndef HARDWARE_API_PROTOCOL_V2_H
+#define HARDWARE_API_PROTOCOL_V2_H
+// Hardware API v2 codec. No Arduino dependencies; all integers are big-endian.
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
 
 namespace hardware_api {
 enum {
-  kFrameSize = 20, kVersion = 1, kRequest = 1, kResponse = 2,
+  kFrameSize = 28, kVersion = 2, kRequest = 1, kResponse = 2,
   kSensorsNode = 13, kActuatorNode = 14, kFanCount = 6,
   kGetTemp = 0x20, kGetVoc = 0x21, kGetDoor = 0x22,
   kGetPressure = 0x23, kGetHumidity = 0x24, kGetDust = 0x25,
@@ -24,6 +24,7 @@ enum Status {
 struct Frame {
   uint8_t version, kind;
   uint16_t tx_id;
+  uint64_t session_id;
   uint8_t node, command, status, idx;
   uint8_t data[8];
 };
@@ -42,6 +43,14 @@ inline void writeU32(uint8_t* p, uint32_t value) {
   p[0] = static_cast<uint8_t>(value >> 24); p[1] = static_cast<uint8_t>(value >> 16);
   p[2] = static_cast<uint8_t>(value >> 8); p[3] = static_cast<uint8_t>(value);
 }
+inline uint64_t readU64(const uint8_t* p) {
+  uint64_t value = 0;
+  for (uint8_t i = 0; i < 8; ++i) value = (value << 8) | p[i];
+  return value;
+}
+inline void writeU64(uint8_t* p, uint64_t value) {
+  for (uint8_t i = 0; i < 8; ++i) { p[7 - i] = static_cast<uint8_t>(value); value >>= 8; }
+}
 inline uint16_t crc16(const uint8_t* bytes, size_t size) {
   uint16_t crc = 0xffff;
   for (size_t i = 0; i < size; ++i) {
@@ -59,13 +68,15 @@ inline void encode(const Frame& frame, uint8_t* bytes) {
   bytes[6] = frame.node; bytes[7] = frame.command;
   bytes[8] = frame.status; bytes[9] = frame.idx;
   memcpy(bytes + 10, frame.data, 8);
-  writeU16(bytes + 18, crc16(bytes + 2, 16));
+  writeU64(bytes + 18, frame.session_id);
+  writeU16(bytes + 26, crc16(bytes + 2, 24));
 }
 inline bool decode(const uint8_t* bytes, Frame& frame) {
   if (bytes[0] != 0xa5 || bytes[1] != 0x5a ||
-      readU16(bytes + 18) != crc16(bytes + 2, 16)) return false;
+      readU16(bytes + 26) != crc16(bytes + 2, 24)) return false;
   frame.version = bytes[2]; frame.kind = bytes[3];
   frame.tx_id = readU16(bytes + 4);
+  frame.session_id = readU64(bytes + 18);
   frame.node = bytes[6]; frame.command = bytes[7];
   frame.status = bytes[8]; frame.idx = bytes[9];
   memcpy(frame.data, bytes + 10, 8);
@@ -79,7 +90,7 @@ inline Frame response(const Frame& request, uint8_t status = OK) {
 }
 inline bool sameRequest(const Frame& request, const Frame& reply) {
   return reply.version == kVersion && reply.kind == kResponse &&
-         request.tx_id == reply.tx_id && request.node == reply.node &&
+         request.session_id == reply.session_id && request.tx_id == reply.tx_id && request.node == reply.node &&
          request.command == reply.command && request.idx == reply.idx;
 }
 inline bool zeros(const uint8_t* data, size_t length) {
@@ -169,4 +180,4 @@ class ReplyBuffer {
   uint8_t bytes_[kFrameSize], position_;
 };
 }  // namespace hardware_api
-#endif  // HARDWARE_API_PROTOCOL_V1_H
+#endif  // HARDWARE_API_PROTOCOL_V2_H

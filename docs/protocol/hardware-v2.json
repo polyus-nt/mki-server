@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "status": "experimental_implemented",
-  "protocol_version": 1,
-  "frame_size": 20,
+  "protocol_version": 2,
+  "frame_size": 28,
   "byte_order": "big",
   "fields": [
     {
@@ -55,8 +55,13 @@
       "size": 8
     },
     {
-      "name": "crc",
+      "name": "session_id",
       "offset": 18,
+      "size": 8
+    },
+    {
+      "name": "crc",
+      "offset": 26,
       "size": 2
     }
   ],
@@ -72,7 +77,7 @@
     "refout": false,
     "xorout": 0,
     "coverage_offset": 2,
-    "coverage_size": 16,
+    "coverage_size": 24,
     "check_ascii": "123456789",
     "check": 10673
   },
@@ -135,7 +140,8 @@
       500
     ],
     "humidity_unit": "%RH",
-    "humidity_scale": 100
+    "humidity_scale": 100,
+    "dust": "raw 10-bit ADC and millivolts; no calibrated concentration"
   },
   "commands": [
     {
@@ -211,7 +217,7 @@
         1
       ],
       "request_data": "zero",
-      "response_data": "not_implemented",
+      "response_data": "u16_adc_0_to_1023, u16_millivolts, flags, u16_age_ms, zero",
       "mcp_exported": false
     },
     {
@@ -300,11 +306,13 @@
   },
   "queue": {
     "max_waiting": 64,
-    "max_retained_decisions": 4096,
+    "max_completed_decision_cache": 4096,
     "max_duplicate_waiters": 64,
     "max_decision_id_bytes": 128,
     "automatic_retry": false,
-    "tx_id_reuse_within_process": false,
-    "tx_id_exhaustion": "reject after 65535 admitted requests; explicit operator reconciliation before restart"
+    "tx_id_reuse_within_session": false,
+    "tx_id_reuse_in_new_session": true,
+    "tx_id_exhaustion": "increment 64-bit session (skip zero), restart tx_id=1; random nonzero session at process start",
+    "decision_retention": "SQLite durable ledger; bounded completed RAM cache, pending records never evicted"
   }
 }

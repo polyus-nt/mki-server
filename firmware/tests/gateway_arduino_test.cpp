@@ -30,39 +30,39 @@ struct Sensors : SensorHardware {
 };
 static Frame request(uint8_t node, uint8_t command, uint8_t idx, uint8_t value = 0) {
   static uint16_t id = 0;
-  Frame frame = {}; frame.version = 1; frame.kind = 1; frame.tx_id = ++id;
+  Frame frame = {}; frame.version = hardware_api::kVersion; frame.kind = 1; frame.tx_id = ++id;
   frame.node = node; frame.command = command; frame.idx = idx; frame.data[0] = value;
   return frame;
 }
 static Frame exchange(Gateway& gateway, ActuatorApi& actuator, SensorApi& sensors,
                       Frame request, uint32_t& now, bool loseReply = false) {
-  uint8_t bytes[20]; encode(request, bytes);
-  for (uint8_t i = 0; i < 20; ++i) gateway.receiveBus(bytes[i], ++now);
+  uint8_t bytes[hardware_api::kFrameSize]; encode(request, bytes);
+  for (uint8_t i = 0; i < hardware_api::kFrameSize; ++i) gateway.receiveBus(bytes[i], ++now);
   Frame forwarded; assert(gateway.takeArduinoRequest(forwarded));
-  uint8_t forwardedBytes[20]; encode(forwarded, forwardedBytes);
-  assert(memcmp(bytes, forwardedBytes, 20) == 0);
+  uint8_t forwardedBytes[hardware_api::kFrameSize]; encode(forwarded, forwardedBytes);
+  assert(memcmp(bytes, forwardedBytes, hardware_api::kFrameSize) == 0);
   StreamParser arduinoParser; Frame command;
-  for (uint8_t i = 0; i < 20; ++i)
-    assert(arduinoParser.feed(forwardedBytes[i], ++now, command) == (i == 19));
+  for (uint8_t i = 0; i < hardware_api::kFrameSize; ++i)
+    assert(arduinoParser.feed(forwardedBytes[i], ++now, command) == (i == hardware_api::kFrameSize - 1));
   Frame reply = command.node == kActuatorNode ? actuator.handle(command, now)
                                              : sensors.handle(command);
   encode(reply, bytes);
   if (!loseReply) {
     Frame foreign = reply; ++foreign.tx_id; encode(foreign, forwardedBytes);
-    for (uint8_t i = 0; i < 20; ++i) gateway.receiveArduino(forwardedBytes[i], ++now);
+    for (uint8_t i = 0; i < hardware_api::kFrameSize; ++i) gateway.receiveArduino(forwardedBytes[i], ++now);
     assert(gateway.state() == Gateway::Waiting);
-    for (uint8_t i = 0; i < 20; ++i) gateway.receiveArduino(bytes[i], ++now);
+    for (uint8_t i = 0; i < hardware_api::kFrameSize; ++i) gateway.receiveArduino(bytes[i], ++now);
   } else {
     now += 1500; gateway.tick(now);
   }
   Frame result; assert(gateway.takeHubResponse(result));
   assert(sameRequest(request, result));
-  if (!loseReply) { encode(result, forwardedBytes); assert(memcmp(bytes, forwardedBytes, 20) == 0); }
+  if (!loseReply) { encode(result, forwardedBytes); assert(memcmp(bytes, forwardedBytes, hardware_api::kFrameSize) == 0); }
   gateway.hubResponseSent(now);
   if (loseReply) {
     assert(result.status == DEVICE_TIMEOUT && gateway.takeCancelArduino());
     // The command WAS applied; its lost response cannot justify a retry.
-    for (uint8_t i = 0; i < 20; ++i) gateway.receiveArduino(bytes[i], ++now);
+    for (uint8_t i = 0; i < hardware_api::kFrameSize; ++i) gateway.receiveArduino(bytes[i], ++now);
     now += 250; gateway.tick(now); assert(gateway.state() == Gateway::Idle);
   }
   return result;

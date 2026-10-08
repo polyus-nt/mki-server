@@ -1,6 +1,6 @@
-//! Hardware API v1: one bounded FIFO, one serial owner, never automatic retries.
+//! Hardware API v2: session correlation, bounded FIFO/cache, durable decisions.
 use crate::{database::Database, state::SharedState};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::{HashMap, VecDeque};
 use std::io::{Read, Write};
@@ -8,11 +8,21 @@ use std::sync::{Arc, Mutex, mpsc};
 use std::time::{Duration, Instant};
 use tokio::sync::oneshot;
 
+fn new_session() -> u64 {
+    loop {
+        let value = rand::random::<u64>();
+        if value != 0 {
+            return value;
+        }
+    }
+}
+pub const FRAME_SIZE: usize = 28;
+pub const PROTOCOL_VERSION: u8 = 2;
 pub const HOST_TIMEOUT: Duration = Duration::from_secs(5);
 pub const QUEUE_TIMEOUT: Duration = Duration::from_secs(30);
 const MAX_WAITING: usize = 64;
-const MAX_DECISIONS: usize = 4096;
-#[derive(Clone, Debug, PartialEq, Eq)]
+const MAX_COMPLETED_CACHE: usize = 4096;
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Command {
     Temperature(u8),
     Voc(u8),
@@ -75,7 +85,8 @@ impl Command {
         let mut data = [0; 8];
         data[0] = value;
         Frame {
-            version: 1,
+            version: PROTOCOL_VERSION,
+            session_id: 0,
             kind: 1,
             tx_id,
             node,
@@ -91,6 +102,7 @@ pub struct Frame {
     pub version: u8,
     pub kind: u8,
     pub tx_id: u16,
+    pub session_id: u64,
     pub node: u8,
     pub command: u8,
     pub status: u8,
@@ -112,20 +124,21 @@ pub fn crc16(bytes: &[u8]) -> u16 {
     crc
 }
 impl Frame {
-    pub fn encode(&self) -> [u8; 20] {
-        let mut b = [0; 20];
+    pub fn encode(&self) -> [u8; FRAME_SIZE] {
+        let mut b = [0; FRAME_SIZE];
         b[..4].copy_from_slice(&[0xa5, 0x5a, self.version, self.kind]);
         b[4..6].copy_from_slice(&self.tx_id.to_be_bytes());
         b[6..10].copy_from_slice(&[self.node, self.command, self.status, self.idx]);
         b[10..18].copy_from_slice(&self.data);
-        let c = crc16(&b[2..18]);
-        b[18..].copy_from_slice(&c.to_be_bytes());
+        b[18..26].copy_from_slice(&self.session_id.to_be_bytes());
+        let c = crc16(&b[2..26]);
+        b[26..].copy_from_slice(&c.to_be_bytes());
         b
     }
     pub fn decode(b: &[u8]) -> Option<Self> {
-        if b.len() != 20
+        if b.len() != FRAME_SIZE
             || b[..2] != [0xa5, 0x5a]
-            || crc16(&b[2..18]) != u16::from_be_bytes([b[18], b[19]])
+            || crc16(&b[2..26]) != u16::from_be_bytes([b[26], b[27]])
         {
             return None;
         }
@@ -133,6 +146,7 @@ impl Frame {
             version: b[2],
             kind: b[3],
             tx_id: u16::from_be_bytes([b[4], b[5]]),
+            session_id: u64::from_be_bytes(b[18..26].try_into().ok()?),
             node: b[6],
             command: b[7],
             status: b[8],
@@ -141,8 +155,9 @@ impl Frame {
         })
     }
     fn matches(&self, r: &Frame) -> bool {
-        self.version == 1
+        self.version == PROTOCOL_VERSION
             && self.kind == 2
+            && self.session_id == r.session_id
             && self.tx_id == r.tx_id
             && self.node == r.node
             && self.command == r.command
@@ -167,12 +182,21 @@ impl Frame {
             return Ok(result);
         }
         match self.command {
-            0x20 | 0x21 | 0x23 | 0x24 => {
+            0x20 | 0x21 | 0x23 | 0x24 | 0x25 => {
                 let age = u16::from_be_bytes([d[5], d[6]]);
                 if !matches!(d[4], 1 | 3) || d[7] != 0 || age == 65535 {
                     return Err("invalid measurement quality");
                 }
                 let raw = u32::from_be_bytes(d[..4].try_into().unwrap());
+                if self.command == 0x25 {
+                    let adc = u16::from_be_bytes([d[0], d[1]]);
+                    if adc > 1023 {
+                        return Err("dust ADC out of range");
+                    }
+                    let mv = u16::from_be_bytes([d[2], d[3]]);
+                    return Ok(json!({"ok":true,"adc":adc,"voltage":f64::from(mv)/1000.0,
+                        "unit":"V","valid":true,"fresh":d[4]&2!=0,"age_ms":age}));
+                }
                 let (value, unit) = match self.command {
                     0x20 => {
                         let signed = raw as i32;
@@ -306,7 +330,7 @@ impl Parser {
             self.frame.pop_front();
             self.first = Some(now);
         }
-        if self.frame.len() < 20 {
+        if self.frame.len() < FRAME_SIZE {
             return None;
         }
         let bytes: Vec<u8> = self.frame.iter().copied().collect();
@@ -332,10 +356,11 @@ pub fn envelope(a: u8, b: u8) -> [u8; 5] {
         b'\n',
     ]
 }
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Outcome {
     pub decision_id: Option<String>,
     pub tx_id: Option<u16>,
+    pub session_id: Option<String>,
     pub result: Value,
 }
 struct Job {
@@ -343,6 +368,7 @@ struct Job {
     command: Command,
     queued: Instant,
     tx_id: u16,
+    session_id: u64,
     sent: Option<Instant>,
     waiters: Vec<oneshot::Sender<Outcome>>,
 }
@@ -355,15 +381,26 @@ pub struct CommandBroker {
     inflight: Option<Job>,
     records: HashMap<String, Record>,
     next_tx: u32,
+    session_id: u64,
+    completed: VecDeque<String>,
+    database: Database,
     online: bool,
 }
 impl Default for CommandBroker {
     fn default() -> Self {
+        Self::with_database(Database::open(":memory:").expect("decision database"))
+    }
+}
+impl CommandBroker {
+    pub fn with_database(database: Database) -> Self {
         Self {
             waiting: VecDeque::new(),
             inflight: None,
             records: HashMap::new(),
             next_tx: 1,
+            session_id: new_session(),
+            completed: VecDeque::new(),
+            database,
             online: false,
         }
     }
@@ -372,7 +409,7 @@ impl CommandBroker {
     pub fn metrics(&self) -> (usize, usize, u32) {
         (
             self.waiting.len(),
-            self.records.len(),
+            self.completed.len(),
             65536u32.saturating_sub(self.next_tx),
         )
     }
@@ -407,10 +444,19 @@ impl CommandBroker {
                 }
                 return Ok(rx);
             }
-            if self.records.len() >= MAX_DECISIONS {
-                return Err(
-                    "decision retention limit reached; restart requires operator reconciliation",
-                );
+            if let Some((stored_command, outcome)) = self
+                .database
+                .decision(id)
+                .map_err(|_| "decision database unavailable")?
+            {
+                if stored_command != serde_json::to_string(&command).unwrap() {
+                    return Err("decision_id conflict: different command or arguments");
+                }
+                let outcome: Outcome = serde_json::from_str(&outcome.ok_or("previous process stopped before durable result; reconcile hardware, do not replay this decision")?)
+                    .map_err(|_| "invalid durable decision result")?;
+                let (tx, rx) = oneshot::channel();
+                let _ = tx.send(outcome);
+                return Ok(rx);
             }
         }
         if !self.online {
@@ -420,12 +466,16 @@ impl CommandBroker {
             return Err("queue full");
         }
         if self.next_tx > u32::from(u16::MAX) {
-            return Err(
-                "hardware transaction IDs exhausted; restart requires operator reconciliation",
-            );
+            // Random process-start namespace; monotonic epochs on wrap avoid
+            // reusing a session inside the process, without stopping the queue.
+            self.session_id = self.session_id.wrapping_add(1).max(1);
+            self.next_tx = 1;
         }
         let (tx, rx) = oneshot::channel();
         if let Some(ref id) = id {
+            self.database
+                .reserve_decision(id, &serde_json::to_string(&command).unwrap())
+                .map_err(|_| "cannot durably reserve decision")?;
             self.records.insert(
                 id.clone(),
                 Record {
@@ -441,19 +491,34 @@ impl CommandBroker {
             command,
             queued: Instant::now(),
             tx_id,
+            session_id: self.session_id,
             sent: None,
             waiters: vec![tx],
         });
         Ok(rx)
     }
     fn finish(&mut self, j: Job, result: Value) -> Outcome {
-        let o = Outcome {
+        let mut o = Outcome {
             decision_id: j.id.clone(),
             tx_id: Some(j.tx_id),
+            session_id: Some(format!("{:016X}", j.session_id)),
             result,
         };
         if let Some(id) = &j.id {
+            if self
+                .database
+                .finish_decision(id, &serde_json::to_string(&o).unwrap())
+                .is_err()
+            {
+                o.result = json!({"ok":false,"error":{"code":"RESULT_STORAGE_FAILED","outcome":"unknown"}});
+            }
             self.records.get_mut(id).unwrap().outcome = Some(o.clone());
+            self.completed.push_back(id.clone());
+            while self.completed.len() > MAX_COMPLETED_CACHE {
+                if let Some(old) = self.completed.pop_front() {
+                    self.records.remove(&old);
+                }
+            }
         }
         for w in j.waiters {
             let _ = w.send(o.clone());
@@ -467,13 +532,16 @@ impl CommandBroker {
         self.expire_waiting(now);
         let mut j = self.waiting.pop_front()?;
         j.sent = Some(now);
-        let f = j.command.frame(j.tx_id);
+        let mut f = j.command.frame(j.tx_id);
+        f.session_id = j.session_id;
         self.inflight = Some(j);
         Some(f)
     }
     pub fn accept(&mut self, r: &Frame) -> Option<(Command, Outcome)> {
         let j = self.inflight.as_ref()?;
-        if !r.matches(&j.command.frame(j.tx_id)) {
+        let mut expected = j.command.frame(j.tx_id);
+        expected.session_id = j.session_id;
+        if !r.matches(&expected) {
             return None;
         }
         let mut result = r.result().ok()?;
@@ -587,6 +655,7 @@ impl SerialRuntime {
                 .chain((0..2).map(Command::Voc))
                 .chain((0..3).map(Command::Humidity))
                 .chain((0..2).map(Command::Door))
+                .chain((0..2).map(Command::Dust))
                 .chain((0..6).map(Command::Pwm))
                 .chain((0..6).map(Command::Rpm))
                 .collect();
@@ -761,6 +830,140 @@ impl Drop for SerialRuntime {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn rollover_keeps_queue_running_and_rejects_old_session() {
+        let mut b = broker();
+        b.session_id = u64::MAX;
+        b.next_tx = 65535;
+        let mut first = b.submit(None, Command::Pwm(0)).unwrap();
+        let old = b.take_next(Instant::now()).unwrap();
+        let stale = response(&old, [99, 0, 0, 0, 0, 0, 0, 0]);
+        b.accept(&stale).unwrap();
+        assert_eq!(first.try_recv().unwrap().result["value"], 99);
+        let mut second = b.submit(None, Command::Pwm(0)).unwrap();
+        let next = b.take_next(Instant::now()).unwrap();
+        assert_eq!(next.tx_id, 1);
+        assert_eq!(next.session_id, 1);
+        // Same tx/node/command/index: only the session distinguishes a late reply.
+        let mut stale = stale;
+        stale.tx_id = next.tx_id;
+        assert!(b.accept(&stale).is_none());
+        assert!(second.try_recv().is_err());
+        b.accept(&response(&next, [50, 0, 0, 0, 0, 0, 0, 0]))
+            .unwrap();
+        assert_eq!(second.try_recv().unwrap().result["value"], 50);
+    }
+    #[test]
+    fn durable_decisions_outlive_cache_and_process_restarts() {
+        let db = Database::open(":memory:").unwrap();
+        let mut b = CommandBroker::with_database(db.clone());
+        b.online = true;
+        for i in 0..MAX_COMPLETED_CACHE + 2 {
+            b.submit(
+                Some(format!("decision-{i}")),
+                Command::SetPwm { idx: 0, pwm: 100 },
+            )
+            .unwrap();
+            let req = b.take_next(Instant::now()).unwrap();
+            b.accept(&response(&req, [230, 0, 0, 0, 0, 0, 0, 0]))
+                .unwrap();
+        }
+        assert_eq!(b.completed.len(), MAX_COMPLETED_CACHE);
+        assert!(!b.records.contains_key("decision-0"));
+        let mut replay = b
+            .submit(
+                Some("decision-0".into()),
+                Command::SetPwm { idx: 0, pwm: 100 },
+            )
+            .unwrap();
+        assert_eq!(replay.try_recv().unwrap().result["applied_pwm"], 230);
+        assert!(b.take_next(Instant::now()).is_none());
+        let previous_session = b.session_id;
+        b.submit(
+            Some("interrupted".into()),
+            Command::SetPwm { idx: 0, pwm: 100 },
+        )
+        .unwrap();
+        drop(b); // Simulated abrupt loss: no final result durably recorded.
+        let mut restarted = CommandBroker::with_database(db);
+        restarted.online = true;
+        assert_ne!(restarted.session_id, previous_session);
+        let mut replay = restarted
+            .submit(
+                Some("decision-0".into()),
+                Command::SetPwm { idx: 0, pwm: 100 },
+            )
+            .unwrap();
+        assert_eq!(replay.try_recv().unwrap().result["applied_pwm"], 230);
+        assert!(
+            restarted
+                .submit(
+                    Some("decision-0".into()),
+                    Command::SetPwm { idx: 0, pwm: 101 }
+                )
+                .is_err()
+        );
+        assert!(
+            restarted
+                .submit(
+                    Some("interrupted".into()),
+                    Command::SetPwm { idx: 0, pwm: 100 }
+                )
+                .unwrap_err()
+                .contains("previous process")
+        );
+        assert!(restarted.take_next(Instant::now()).is_none());
+    }
+    #[test]
+    fn more_than_65535_requests_do_not_exhaust_or_grow_memory() {
+        let mut b = broker();
+        let initial = b.session_id;
+        for _ in 0..70000 {
+            b.submit(None, Command::Pwm(0)).unwrap();
+            let req = b.take_next(Instant::now()).unwrap();
+            assert!(b.accept(&response(&req, [0; 8])).is_some());
+        }
+        assert_ne!(b.session_id, initial);
+        assert!(b.waiting.is_empty() && b.inflight.is_none() && b.records.is_empty());
+    }
+    #[test]
+    fn decision_journal_survives_database_reopen() {
+        let path = std::env::temp_dir().join(format!(
+            "tjc-decision-test-{:032x}.sqlite",
+            rand::random::<u128>()
+        ));
+        {
+            let mut b = CommandBroker::with_database(Database::open(&path).unwrap());
+            b.online = true;
+            b.submit(
+                Some("finished".into()),
+                Command::SetPwm { idx: 0, pwm: 100 },
+            )
+            .unwrap();
+            let req = b.take_next(Instant::now()).unwrap();
+            b.accept(&response(&req, [230, 0, 0, 0, 0, 0, 0, 0]))
+                .unwrap();
+            b.submit(Some("pending".into()), Command::SetPwm { idx: 0, pwm: 100 })
+                .unwrap();
+        }
+        {
+            let mut b = CommandBroker::with_database(Database::open(&path).unwrap());
+            b.online = true;
+            let mut cached = b
+                .submit(
+                    Some("finished".into()),
+                    Command::SetPwm { idx: 0, pwm: 100 },
+                )
+                .unwrap();
+            assert_eq!(cached.try_recv().unwrap().result["applied_pwm"], 230);
+            assert!(
+                b.submit(Some("pending".into()), Command::SetPwm { idx: 0, pwm: 100 })
+                    .is_err()
+            );
+            assert!(b.take_next(Instant::now()).is_none());
+        }
+        std::fs::remove_file(path).unwrap();
+    }
     fn broker() -> CommandBroker {
         let mut b = CommandBroker::default();
         b.online = true;
@@ -776,7 +979,7 @@ mod tests {
     fn crc_and_golden_vectors() {
         assert_eq!(crc16(b"123456789"), 0x29b1);
         let v: Value =
-            serde_json::from_str(include_str!("../docs/protocol/hardware-v1-vectors.json"))
+            serde_json::from_str(include_str!("../docs/protocol/hardware-v2-vectors.json"))
                 .unwrap();
         for c in v["round_trips"].as_array().unwrap() {
             for k in ["request_hex", "response_hex"] {
@@ -898,7 +1101,9 @@ mod tests {
         let next = b.take_next(Instant::now()).unwrap();
         assert!(next.tx_id > first.tx_id);
         b.next_tx = 65536;
-        assert!(b.submit(None, Command::Pwm(0)).is_err());
+        let old_session = b.session_id;
+        b.submit(None, Command::Pwm(0)).unwrap();
+        assert_ne!(b.session_id, old_session);
         let mut b = broker();
         let mut rx = b.submit(None, Command::Pwm(0)).unwrap();
         b.expire(Instant::now() + QUEUE_TIMEOUT);
@@ -1009,7 +1214,7 @@ mod tests {
         let read_request = |master: &mut std::fs::File| {
             let end = Instant::now() + Duration::from_secs(4);
             let mut packets = Vec::new();
-            while packets.len() < 100 {
+            while packets.len() < FRAME_SIZE * 5 {
                 let mut byte = [0];
                 match master.read(&mut byte) {
                     Ok(1) => packets.push(byte[0]),

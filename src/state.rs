@@ -10,6 +10,7 @@ pub struct SystemState {
     pub pressure: [Option<Value>; 3],
     pub voc: [Option<Value>; 2],
     pub humidity: [Option<Value>; 3],
+    pub dust: [Option<Value>; 2],
     pub doors: [Option<Value>; 2],
     pub pwm: [Option<Value>; 6],
     pub rpm: [Option<Value>; 6],
@@ -34,6 +35,7 @@ impl SharedState {
             Command::Pressure(i) => s.pressure[usize::from(i)] = Some(sample),
             Command::Voc(i) => s.voc[usize::from(i)] = Some(sample),
             Command::Humidity(i) => s.humidity[usize::from(i)] = Some(sample),
+            Command::Dust(i) => s.dust[usize::from(i)] = Some(sample),
             Command::Door(i) => s.doors[usize::from(i)] = Some(sample),
             Command::Pwm(i) | Command::SetPwm { idx: i, .. } => {
                 s.pwm[usize::from(i)] = Some(sample)

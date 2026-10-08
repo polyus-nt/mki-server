@@ -80,13 +80,19 @@ fn tool_catalog() -> Vec<Value> {
     for (name, max) in [
         ("get_temperature", 2),
         ("get_voc", 1),
+        ("get_dust", 1),
         ("get_door_state", 1),
         ("get_pressure", 2),
         ("get_humidity", 2),
         ("get_fan_pwm", 5),
         ("get_fan_rpm", 5),
     ] {
-        tools.push(json!({"name":name,"description":"Actual hardware response through the shared FIFO; idx is zero-based.","inputSchema":{"type":"object","properties":{"idx":{"type":"integer","minimum":0,"maximum":max},"decision_id":{"type":"string","minLength":1,"maxLength":128}},"required":["idx"],"additionalProperties":false}}));
+        let description = if name == "get_dust" {
+            "GP2Y1010AU0F raw ADC 0..1023 and calculated voltage in V; NOT dust concentration. idx 0..1."
+        } else {
+            "Actual hardware response through the shared FIFO; idx is zero-based."
+        };
+        tools.push(json!({"name":name,"description":description,"inputSchema":{"type":"object","properties":{"idx":{"type":"integer","minimum":0,"maximum":max},"decision_id":{"type":"string","minLength":1,"maxLength":128}},"required":["idx"],"additionalProperties":false}}));
     }
     tools.push(json!({"name":"set_fan_pwm","description":"Set PWM 0..255, returns the applied value. Requires TJC_AGENT_PHASE=full and a decision_id. No automatic retry.","inputSchema":{"type":"object","properties":{"idx":{"type":"integer","minimum":0,"maximum":5},"pwm":{"type":"integer","minimum":0,"maximum":255},"decision_id":{"type":"string","minLength":1,"maxLength":128}},"required":["idx","pwm","decision_id"],"additionalProperties":false}}));
     for name in [
@@ -112,7 +118,7 @@ fn number(v: &Value, k: &str, max: u64) -> Result<u8, String> {
 fn command(name: &str, a: &Value) -> Result<Command, String> {
     let max = match name {
         "get_temperature" | "get_pressure" | "get_humidity" => 2,
-        "get_voc" | "get_door_state" => 1,
+        "get_voc" | "get_door_state" | "get_dust" => 1,
         "get_fan_pwm" | "get_fan_rpm" | "set_fan_pwm" => 5,
         _ => return Err("unknown User API tool".into()),
     };
@@ -132,6 +138,7 @@ fn command(name: &str, a: &Value) -> Result<Command, String> {
         "get_pressure" => Command::Pressure(idx),
         "get_humidity" => Command::Humidity(idx),
         "get_voc" => Command::Voc(idx),
+        "get_dust" => Command::Dust(idx),
         "get_door_state" => Command::Door(idx),
         "get_fan_pwm" => Command::Pwm(idx),
         "get_fan_rpm" => Command::Rpm(idx),
@@ -197,6 +204,7 @@ async fn call_tool(state: &ServerState, params: &Value) -> Value {
                             let mut v = outcome.result;
                             v["decision_id"] = json!(outcome.decision_id);
                             v["tx_id"] = json!(outcome.tx_id);
+                            v["session_id"] = json!(outcome.session_id);
                             result(v)
                         }
                         Err(e) => result(

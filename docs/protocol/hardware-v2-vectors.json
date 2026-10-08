@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "protocol_version": 1,
+  "protocol_version": 2,
   "status": "experimental_implemented",
   "crc_check": {
     "ascii": "123456789",
@@ -10,7 +10,7 @@
     {
       "name": "temperature_positive",
       "request": {
-        "version": 1,
+        "version": 2,
         "kind": 1,
         "tx_id": 1,
         "node": 13,
@@ -26,10 +26,11 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
       "response": {
-        "version": 1,
+        "version": 2,
         "kind": 2,
         "tx_id": 1,
         "node": 13,
@@ -45,10 +46,11 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
-      "request_hex": "A5 5A 01 01 00 01 0D 20 00 00 00 00 00 00 00 00 00 00 96 C2",
-      "response_hex": "A5 5A 01 02 00 01 0D 20 00 00 00 00 09 F6 03 00 00 00 54 0A",
+      "request_hex": "A5 5A 02 01 00 01 0D 20 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 1F 2C",
+      "response_hex": "A5 5A 02 02 00 01 0D 20 00 00 00 00 09 F6 03 00 00 00 00 00 00 00 00 00 00 01 7E 63",
       "api_result": {
         "ok": true,
         "value": 25.5,
@@ -61,7 +63,7 @@
     {
       "name": "temperature_negative",
       "request": {
-        "version": 1,
+        "version": 2,
         "kind": 1,
         "tx_id": 2,
         "node": 13,
@@ -77,10 +79,11 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
       "response": {
-        "version": 1,
+        "version": 2,
         "kind": 2,
         "tx_id": 2,
         "node": 13,
@@ -96,10 +99,11 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
-      "request_hex": "A5 5A 01 01 00 02 0D 20 00 01 00 00 00 00 00 00 00 00 B2 44",
-      "response_hex": "A5 5A 01 02 00 02 0D 20 00 01 FF FF FF E7 03 00 00 00 F3 E4",
+      "request_hex": "A5 5A 02 01 00 02 0D 20 00 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 61 F5",
+      "response_hex": "A5 5A 02 02 00 02 0D 20 00 01 FF FF FF E7 03 00 00 00 00 00 00 00 00 00 00 01 15 F9",
       "api_result": {
         "ok": true,
         "value": -0.25,
@@ -112,7 +116,7 @@
     {
       "name": "temperature_retained",
       "request": {
-        "version": 1,
+        "version": 2,
         "kind": 1,
         "tx_id": 3,
         "node": 13,
@@ -128,10 +132,11 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
       "response": {
-        "version": 1,
+        "version": 2,
         "kind": 2,
         "tx_id": 3,
         "node": 13,
@@ -147,10 +152,11 @@
           19,
           136,
           0
-        ]
+        ],
+        "session_id": 1
       },
-      "request_hex": "A5 5A 01 01 00 03 0D 20 00 00 00 00 00 00 00 00 00 00 1C 04",
-      "response_hex": "A5 5A 01 02 00 03 0D 20 00 00 00 00 08 4D 01 13 88 00 3C C7",
+      "request_hex": "A5 5A 02 01 00 03 0D 20 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 A4 E1",
+      "response_hex": "A5 5A 02 02 00 03 0D 20 00 00 00 00 08 4D 01 13 88 00 00 00 00 00 00 00 00 01 71 1E",
       "api_result": {
         "ok": true,
         "value": 21.25,
@@ -163,7 +169,7 @@
     {
       "name": "temperature_age_saturated",
       "request": {
-        "version": 1,
+        "version": 2,
         "kind": 1,
         "tx_id": 4,
         "node": 13,
@@ -179,10 +185,11 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
       "response": {
-        "version": 1,
+        "version": 2,
         "kind": 2,
         "tx_id": 4,
         "node": 13,
@@ -198,10 +205,11 @@
           255,
           254,
           0
-        ]
+        ],
+        "session_id": 1
       },
-      "request_hex": "A5 5A 01 01 00 04 0D 20 00 00 00 00 00 00 00 00 00 00 D6 0C",
-      "response_hex": "A5 5A 01 02 00 04 0D 20 00 00 00 00 08 4D 01 FF FE 00 81 60",
+      "request_hex": "A5 5A 02 01 00 04 0D 20 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 AD 61",
+      "response_hex": "A5 5A 02 02 00 04 0D 20 00 00 00 00 08 4D 01 FF FE 00 00 00 00 00 00 00 00 01 40 6C",
       "api_result": {
         "ok": true,
         "value": 21.25,
@@ -214,7 +222,7 @@
     {
       "name": "temperature_before_first_measurement",
       "request": {
-        "version": 1,
+        "version": 2,
         "kind": 1,
         "tx_id": 5,
         "node": 13,
@@ -230,10 +238,11 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
       "response": {
-        "version": 1,
+        "version": 2,
         "kind": 2,
         "tx_id": 5,
         "node": 13,
@@ -249,10 +258,11 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
-      "request_hex": "A5 5A 01 01 00 05 0D 20 00 00 00 00 00 00 00 00 00 00 93 6F",
-      "response_hex": "A5 5A 01 02 00 05 0D 20 05 00 00 00 00 00 00 00 00 00 B2 3A",
+      "request_hex": "A5 5A 02 01 00 05 0D 20 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 78 97",
+      "response_hex": "A5 5A 02 02 00 05 0D 20 05 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 D7 1C",
       "api_result": {
         "ok": false,
         "error": {
@@ -264,7 +274,7 @@
     {
       "name": "voc_without_pin_map",
       "request": {
-        "version": 1,
+        "version": 2,
         "kind": 1,
         "tx_id": 6,
         "node": 13,
@@ -280,10 +290,11 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
       "response": {
-        "version": 1,
+        "version": 2,
         "kind": 2,
         "tx_id": 6,
         "node": 13,
@@ -299,10 +310,11 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
-      "request_hex": "A5 5A 01 01 00 06 0D 21 00 01 00 00 00 00 00 00 00 00 6F A0",
-      "response_hex": "A5 5A 01 02 00 06 0D 21 04 01 00 00 00 00 00 00 00 00 21 B0",
+      "request_hex": "A5 5A 02 01 00 06 0D 21 00 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 D8 51",
+      "response_hex": "A5 5A 02 02 00 06 0D 21 04 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 87 EB",
       "api_result": {
         "ok": false,
         "error": {
@@ -314,7 +326,7 @@
     {
       "name": "door_closed",
       "request": {
-        "version": 1,
+        "version": 2,
         "kind": 1,
         "tx_id": 7,
         "node": 13,
@@ -330,10 +342,11 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
       "response": {
-        "version": 1,
+        "version": 2,
         "kind": 2,
         "tx_id": 7,
         "node": 13,
@@ -349,10 +362,11 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
-      "request_hex": "A5 5A 01 01 00 07 0D 22 00 00 00 00 00 00 00 00 00 00 B9 1A",
-      "response_hex": "A5 5A 01 02 00 07 0D 22 00 00 01 00 00 00 00 00 00 00 1D EC",
+      "request_hex": "A5 5A 02 01 00 07 0D 22 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 6F 45",
+      "response_hex": "A5 5A 02 02 00 07 0D 22 00 00 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 68 7C",
       "api_result": {
         "ok": true,
         "value": true
@@ -361,7 +375,7 @@
     {
       "name": "door_open",
       "request": {
-        "version": 1,
+        "version": 2,
         "kind": 1,
         "tx_id": 8,
         "node": 13,
@@ -377,10 +391,11 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
       "response": {
-        "version": 1,
+        "version": 2,
         "kind": 2,
         "tx_id": 8,
         "node": 13,
@@ -396,10 +411,11 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
-      "request_hex": "A5 5A 01 01 00 08 0D 22 00 01 00 00 00 00 00 00 00 00 93 6B",
-      "response_hex": "A5 5A 01 02 00 08 0D 22 00 01 00 00 00 00 00 00 00 00 70 4E",
+      "request_hex": "A5 5A 02 01 00 08 0D 22 00 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 B9 51",
+      "response_hex": "A5 5A 02 02 00 08 0D 22 00 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 16 4C",
       "api_result": {
         "ok": true,
         "value": false
@@ -408,7 +424,7 @@
     {
       "name": "pressure_without_pin_map",
       "request": {
-        "version": 1,
+        "version": 2,
         "kind": 1,
         "tx_id": 9,
         "node": 13,
@@ -424,10 +440,11 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
       "response": {
-        "version": 1,
+        "version": 2,
         "kind": 2,
         "tx_id": 9,
         "node": 13,
@@ -443,10 +460,11 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
-      "request_hex": "A5 5A 01 01 00 09 0D 23 00 02 00 00 00 00 00 00 00 00 23 05",
-      "response_hex": "A5 5A 01 02 00 09 0D 23 04 02 00 00 00 00 00 00 00 00 6D 15",
+      "request_hex": "A5 5A 02 01 00 09 0D 23 00 02 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 83 9E",
+      "response_hex": "A5 5A 02 02 00 09 0D 23 04 02 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 DC 24",
       "api_result": {
         "ok": false,
         "error": {
@@ -458,7 +476,7 @@
     {
       "name": "pressure_encoding_example",
       "request": {
-        "version": 1,
+        "version": 2,
         "kind": 1,
         "tx_id": 10,
         "node": 13,
@@ -474,10 +492,11 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
       "response": {
-        "version": 1,
+        "version": 2,
         "kind": 2,
         "tx_id": 10,
         "node": 13,
@@ -493,10 +512,11 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
-      "request_hex": "A5 5A 01 01 00 0A 0D 23 00 01 00 00 00 00 00 00 00 00 C1 E4",
-      "response_hex": "A5 5A 01 02 00 0A 0D 23 00 01 00 01 8B CD 03 00 00 00 04 3C",
+      "request_hex": "A5 5A 02 01 00 0A 0D 23 00 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 DC 83",
+      "response_hex": "A5 5A 02 02 00 0A 0D 23 00 01 00 01 8B CD 03 00 00 00 00 00 00 00 00 00 00 01 4D AF",
       "context": "codec-only synthetic value; current BMP280 stub cannot emit this response",
       "api_result": {
         "ok": true,
@@ -510,7 +530,7 @@
     {
       "name": "pwm_zero",
       "request": {
-        "version": 1,
+        "version": 2,
         "kind": 1,
         "tx_id": 11,
         "node": 14,
@@ -526,10 +546,11 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
       "response": {
-        "version": 1,
+        "version": 2,
         "kind": 2,
         "tx_id": 11,
         "node": 14,
@@ -545,10 +566,11 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
-      "request_hex": "A5 5A 01 01 00 0B 0E 30 00 00 00 00 00 00 00 00 00 00 47 FC",
-      "response_hex": "A5 5A 01 02 00 0B 0E 30 00 00 00 00 00 00 00 00 00 00 A4 D9",
+      "request_hex": "A5 5A 02 01 00 0B 0E 30 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 05 1F",
+      "response_hex": "A5 5A 02 02 00 0B 0E 30 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 AA 02",
       "api_result": {
         "ok": true,
         "value": 0
@@ -557,7 +579,7 @@
     {
       "name": "pwm_maximum",
       "request": {
-        "version": 1,
+        "version": 2,
         "kind": 1,
         "tx_id": 12,
         "node": 14,
@@ -573,10 +595,11 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
       "response": {
-        "version": 1,
+        "version": 2,
         "kind": 2,
         "tx_id": 12,
         "node": 14,
@@ -592,10 +615,11 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
-      "request_hex": "A5 5A 01 01 00 0C 0E 30 00 05 00 00 00 00 00 00 00 00 FA 38",
-      "response_hex": "A5 5A 01 02 00 0C 0E 30 00 05 FF 00 00 00 00 00 00 00 8D 52",
+      "request_hex": "A5 5A 02 01 00 0C 0E 30 00 05 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 5F F5",
+      "response_hex": "A5 5A 02 02 00 0C 0E 30 00 05 FF 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 68 B5",
       "api_result": {
         "ok": true,
         "value": 255
@@ -604,7 +628,7 @@
     {
       "name": "rpm_bytes_03",
       "request": {
-        "version": 1,
+        "version": 2,
         "kind": 1,
         "tx_id": 13,
         "node": 14,
@@ -620,10 +644,11 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
       "response": {
-        "version": 1,
+        "version": 2,
         "kind": 2,
         "tx_id": 13,
         "node": 14,
@@ -639,10 +664,11 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
-      "request_hex": "A5 5A 01 01 00 0D 0E 31 00 01 00 00 00 00 00 00 00 00 FB FD",
-      "response_hex": "A5 5A 01 02 00 0D 0E 31 00 01 00 00 03 03 00 00 00 00 38 EA",
+      "request_hex": "A5 5A 02 01 00 0D 0E 31 00 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 17 94",
+      "response_hex": "A5 5A 02 02 00 0D 0E 31 00 01 00 00 03 03 00 00 00 00 00 00 00 00 00 00 00 01 FA 8F",
       "api_result": {
         "ok": true,
         "value": 771,
@@ -652,7 +678,7 @@
     {
       "name": "rpm_embedded_magic",
       "request": {
-        "version": 1,
+        "version": 2,
         "kind": 1,
         "tx_id": 14,
         "node": 14,
@@ -668,10 +694,11 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
       "response": {
-        "version": 1,
+        "version": 2,
         "kind": 2,
         "tx_id": 14,
         "node": 14,
@@ -687,10 +714,11 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
-      "request_hex": "A5 5A 01 01 00 0E 0E 31 00 02 00 00 00 00 00 00 00 00 19 1C",
-      "response_hex": "A5 5A 01 02 00 0E 0E 31 00 02 00 00 A5 5A 00 00 00 00 0B 8C",
+      "request_hex": "A5 5A 02 01 00 0E 0E 31 00 02 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 48 89",
+      "response_hex": "A5 5A 02 02 00 0E 0E 31 00 02 00 00 A5 5A 00 00 00 00 00 00 00 00 00 00 00 01 66 19",
       "api_result": {
         "ok": true,
         "value": 42330,
@@ -700,7 +728,7 @@
     {
       "name": "rpm_u32_maximum",
       "request": {
-        "version": 1,
+        "version": 2,
         "kind": 1,
         "tx_id": 15,
         "node": 14,
@@ -716,10 +744,11 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
       "response": {
-        "version": 1,
+        "version": 2,
         "kind": 2,
         "tx_id": 15,
         "node": 14,
@@ -735,10 +764,11 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
-      "request_hex": "A5 5A 01 01 00 0F 0E 31 00 05 00 00 00 00 00 00 00 00 ED D4",
-      "response_hex": "A5 5A 01 02 00 0F 0E 31 00 05 FF FF FF FF 00 00 00 00 31 DF",
+      "request_hex": "A5 5A 02 01 00 0F 0E 31 00 05 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 EF D1",
+      "response_hex": "A5 5A 02 02 00 0F 0E 31 00 05 FF FF FF FF 00 00 00 00 00 00 00 00 00 00 00 01 83 AC",
       "context": "codec-only boundary, not a physical fan claim",
       "api_result": {
         "ok": true,
@@ -749,7 +779,7 @@
     {
       "name": "set_pwm_normal",
       "request": {
-        "version": 1,
+        "version": 2,
         "kind": 1,
         "tx_id": 16,
         "node": 14,
@@ -765,10 +795,11 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
       "response": {
-        "version": 1,
+        "version": 2,
         "kind": 2,
         "tx_id": 16,
         "node": 14,
@@ -784,10 +815,11 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
-      "request_hex": "A5 5A 01 01 00 10 0E 32 00 02 64 00 00 00 00 00 00 00 71 B6",
-      "response_hex": "A5 5A 01 02 00 10 0E 32 00 02 64 00 00 00 00 00 00 00 92 93",
+      "request_hex": "A5 5A 02 01 00 10 0E 32 00 02 64 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 ED AA",
+      "response_hex": "A5 5A 02 02 00 10 0E 32 00 02 64 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 42 B7",
       "api_result": {
         "ok": true,
         "applied_pwm": 100
@@ -796,7 +828,7 @@
     {
       "name": "set_pwm_fault_mode_2",
       "request": {
-        "version": 1,
+        "version": 2,
         "kind": 1,
         "tx_id": 17,
         "node": 14,
@@ -812,10 +844,11 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
       "response": {
-        "version": 1,
+        "version": 2,
         "kind": 2,
         "tx_id": 17,
         "node": 14,
@@ -831,10 +864,11 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
-      "request_hex": "A5 5A 01 01 00 11 0E 32 00 04 64 00 00 00 00 00 00 00 6E 5D",
-      "response_hex": "A5 5A 01 02 00 11 0E 32 00 04 E6 00 00 00 00 00 00 00 FF 5F",
+      "request_hex": "A5 5A 02 01 00 11 0E 32 00 04 64 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 5A 10",
+      "response_hex": "A5 5A 02 02 00 11 0E 32 00 04 E6 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 BD 15",
       "context": "fixture RNG selects 230; only fan 4 is in mode 2",
       "api_result": {
         "ok": true,
@@ -844,7 +878,7 @@
     {
       "name": "get_mode_normal",
       "request": {
-        "version": 1,
+        "version": 2,
         "kind": 1,
         "tx_id": 18,
         "node": 14,
@@ -860,10 +894,11 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
       "response": {
-        "version": 1,
+        "version": 2,
         "kind": 2,
         "tx_id": 18,
         "node": 14,
@@ -879,10 +914,11 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
-      "request_hex": "A5 5A 01 01 00 12 0E 40 00 FF 00 00 00 00 00 00 00 00 28 DE",
-      "response_hex": "A5 5A 01 02 00 12 0E 40 00 FF 00 FF 00 00 00 00 00 00 6E 8A",
+      "request_hex": "A5 5A 02 01 00 12 0E 40 00 FF 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 5F 70",
+      "response_hex": "A5 5A 02 02 00 12 0E 40 00 FF 00 FF 00 00 00 00 00 00 00 00 00 00 00 00 00 01 02 3A",
       "api_result": {
         "ok": true,
         "mode": 0,
@@ -892,7 +928,7 @@
     {
       "name": "get_mode_periodic",
       "request": {
-        "version": 1,
+        "version": 2,
         "kind": 1,
         "tx_id": 19,
         "node": 14,
@@ -908,10 +944,11 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
       "response": {
-        "version": 1,
+        "version": 2,
         "kind": 2,
         "tx_id": 19,
         "node": 14,
@@ -927,10 +964,11 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
-      "request_hex": "A5 5A 01 01 00 13 0E 40 00 FF 00 00 00 00 00 00 00 00 6D BD",
-      "response_hex": "A5 5A 01 02 00 13 0E 40 00 FF 01 02 00 00 00 00 00 00 A9 A8",
+      "request_hex": "A5 5A 02 01 00 13 0E 40 00 FF 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 8A 86",
+      "response_hex": "A5 5A 02 02 00 13 0E 40 00 FF 01 02 00 00 00 00 00 00 00 00 00 00 00 00 00 01 C0 66",
       "api_result": {
         "ok": true,
         "mode": 1,
@@ -940,7 +978,7 @@
     {
       "name": "set_mode_periodic",
       "request": {
-        "version": 1,
+        "version": 2,
         "kind": 1,
         "tx_id": 20,
         "node": 14,
@@ -956,10 +994,11 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
       "response": {
-        "version": 1,
+        "version": 2,
         "kind": 2,
         "tx_id": 20,
         "node": 14,
@@ -975,10 +1014,11 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
-      "request_hex": "A5 5A 01 01 00 14 0E 41 00 02 01 00 00 00 00 00 00 00 72 75",
-      "response_hex": "A5 5A 01 02 00 14 0E 41 00 02 01 02 00 00 00 00 00 00 F1 B3",
+      "request_hex": "A5 5A 02 01 00 14 0E 41 00 02 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 8B 48",
+      "response_hex": "A5 5A 02 02 00 14 0E 41 00 02 01 02 00 00 00 00 00 00 00 00 00 00 00 00 00 01 69 8C",
       "api_result": {
         "ok": true,
         "mode": 1,
@@ -988,7 +1028,7 @@
     {
       "name": "set_mode_distort_commands",
       "request": {
-        "version": 1,
+        "version": 2,
         "kind": 1,
         "tx_id": 21,
         "node": 14,
@@ -1004,10 +1044,11 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
       "response": {
-        "version": 1,
+        "version": 2,
         "kind": 2,
         "tx_id": 21,
         "node": 14,
@@ -1023,10 +1064,11 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
-      "request_hex": "A5 5A 01 01 00 15 0E 41 00 04 02 00 00 00 00 00 00 00 A5 EB",
-      "response_hex": "A5 5A 01 02 00 15 0E 41 00 04 02 04 00 00 00 00 00 00 87 08",
+      "request_hex": "A5 5A 02 01 00 15 0E 41 00 04 02 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 D4 BF",
+      "response_hex": "A5 5A 02 02 00 15 0E 41 00 04 02 04 00 00 00 00 00 00 00 00 00 00 00 00 00 01 E0 10",
       "api_result": {
         "ok": true,
         "mode": 2,
@@ -1036,7 +1078,7 @@
     {
       "name": "set_mode_off_preserves_pwm",
       "request": {
-        "version": 1,
+        "version": 2,
         "kind": 1,
         "tx_id": 22,
         "node": 14,
@@ -1052,10 +1094,11 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
       "response": {
-        "version": 1,
+        "version": 2,
         "kind": 2,
         "tx_id": 22,
         "node": 14,
@@ -1071,10 +1114,11 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
-      "request_hex": "A5 5A 01 01 00 16 0E 41 00 04 00 00 00 00 00 00 00 00 E5 E8",
-      "response_hex": "A5 5A 01 02 00 16 0E 41 00 04 00 FF 00 00 00 00 00 00 A3 BC",
+      "request_hex": "A5 5A 02 01 00 16 0E 41 00 04 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 FA ED",
+      "response_hex": "A5 5A 02 02 00 16 0E 41 00 04 00 FF 00 00 00 00 00 00 00 00 00 00 00 00 00 01 A7 A7",
       "api_result": {
         "ok": true,
         "mode": 0,
@@ -1084,7 +1128,7 @@
     {
       "name": "arduino_rejects_lock_door_0",
       "request": {
-        "version": 1,
+        "version": 2,
         "kind": 1,
         "tx_id": 23,
         "node": 14,
@@ -1100,10 +1144,11 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
       "response": {
-        "version": 1,
+        "version": 2,
         "kind": 2,
         "tx_id": 23,
         "node": 14,
@@ -1119,10 +1164,11 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
-      "request_hex": "A5 5A 01 01 00 17 0E 42 00 00 01 00 00 00 00 00 00 00 03 4D",
-      "response_hex": "A5 5A 01 02 00 17 0E 42 03 00 00 00 00 00 00 00 00 00 16 74",
+      "request_hex": "A5 5A 02 01 00 17 0E 42 00 00 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 B6 B7",
+      "response_hex": "A5 5A 02 02 00 17 0E 42 03 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 B1 FC",
       "api_result": {
         "ok": false,
         "error": {
@@ -1133,7 +1179,7 @@
     {
       "name": "arduino_rejects_unlock_door_1",
       "request": {
-        "version": 1,
+        "version": 2,
         "kind": 1,
         "tx_id": 24,
         "node": 14,
@@ -1149,10 +1195,11 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
       "response": {
-        "version": 1,
+        "version": 2,
         "kind": 2,
         "tx_id": 24,
         "node": 14,
@@ -1168,10 +1215,11 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
-      "request_hex": "A5 5A 01 01 00 18 0E 42 00 01 00 00 00 00 00 00 00 00 6E EF",
-      "response_hex": "A5 5A 01 02 00 18 0E 42 03 01 00 00 00 00 00 00 00 00 3C 05",
+      "request_hex": "A5 5A 02 01 00 18 0E 42 00 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 C8 87",
+      "response_hex": "A5 5A 02 02 00 18 0E 42 03 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 67 E8",
       "api_result": {
         "ok": false,
         "error": {
@@ -1182,7 +1230,7 @@
     {
       "name": "invalid_fan_index",
       "request": {
-        "version": 1,
+        "version": 2,
         "kind": 1,
         "tx_id": 25,
         "node": 14,
@@ -1198,10 +1246,11 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
       "response": {
-        "version": 1,
+        "version": 2,
         "kind": 2,
         "tx_id": 25,
         "node": 14,
@@ -1217,10 +1266,11 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
-      "request_hex": "A5 5A 01 01 00 19 0E 31 00 06 00 00 00 00 00 00 00 00 59 4F",
-      "response_hex": "A5 5A 01 02 00 19 0E 31 01 06 00 00 00 00 00 00 00 00 D5 2F",
+      "request_hex": "A5 5A 02 01 00 19 0E 31 00 06 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 8C 4C",
+      "response_hex": "A5 5A 02 02 00 19 0E 31 01 06 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 D3 60",
       "api_result": {
         "ok": false,
         "error": {
@@ -1231,7 +1281,7 @@
     {
       "name": "invalid_door_index",
       "request": {
-        "version": 1,
+        "version": 2,
         "kind": 1,
         "tx_id": 26,
         "node": 13,
@@ -1247,10 +1297,11 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
       "response": {
-        "version": 1,
+        "version": 2,
         "kind": 2,
         "tx_id": 26,
         "node": 13,
@@ -1266,10 +1317,11 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
-      "request_hex": "A5 5A 01 01 00 1A 0D 22 00 02 00 00 00 00 00 00 00 00 22 5D",
-      "response_hex": "A5 5A 01 02 00 1A 0D 22 01 02 00 00 00 00 00 00 00 00 AE 3D",
+      "request_hex": "A5 5A 02 01 00 1A 0D 22 00 02 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 BD 77",
+      "response_hex": "A5 5A 02 02 00 1A 0D 22 01 02 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 E2 5B",
       "api_result": {
         "ok": false,
         "error": {
@@ -1280,7 +1332,7 @@
     {
       "name": "arduino_rejects_invalid_lock_bool",
       "request": {
-        "version": 1,
+        "version": 2,
         "kind": 1,
         "tx_id": 27,
         "node": 14,
@@ -1296,10 +1348,11 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
       "response": {
-        "version": 1,
+        "version": 2,
         "kind": 2,
         "tx_id": 27,
         "node": 14,
@@ -1315,10 +1368,11 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
-      "request_hex": "A5 5A 01 01 00 1B 0E 42 00 01 02 00 00 00 00 00 00 00 2E EC",
-      "response_hex": "A5 5A 01 02 00 1B 0E 42 03 01 00 00 00 00 00 00 00 00 F3 A0",
+      "request_hex": "A5 5A 02 01 00 1B 0E 42 00 01 02 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 E6 D5",
+      "response_hex": "A5 5A 02 02 00 1B 0E 42 03 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 09 D3",
       "api_result": {
         "ok": false,
         "error": {
@@ -1329,7 +1383,7 @@
     {
       "name": "invalid_mode",
       "request": {
-        "version": 1,
+        "version": 2,
         "kind": 1,
         "tx_id": 28,
         "node": 14,
@@ -1345,10 +1399,11 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
       "response": {
-        "version": 1,
+        "version": 2,
         "kind": 2,
         "tx_id": 28,
         "node": 14,
@@ -1364,10 +1419,11 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
-      "request_hex": "A5 5A 01 01 00 1C 0E 41 00 02 03 00 00 00 00 00 00 00 F6 89",
-      "response_hex": "A5 5A 01 02 00 1C 0E 41 02 02 00 00 00 00 00 00 00 00 03 53",
+      "request_hex": "A5 5A 02 01 00 1C 0E 41 00 02 03 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 04 57",
+      "response_hex": "A5 5A 02 02 00 1C 0E 41 02 02 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 B3 44",
       "api_result": {
         "ok": false,
         "error": {
@@ -1378,7 +1434,7 @@
     {
       "name": "command_node_mismatch",
       "request": {
-        "version": 1,
+        "version": 2,
         "kind": 1,
         "tx_id": 29,
         "node": 13,
@@ -1394,10 +1450,11 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
       "response": {
-        "version": 1,
+        "version": 2,
         "kind": 2,
         "tx_id": 29,
         "node": 13,
@@ -1413,10 +1470,11 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
-      "request_hex": "A5 5A 01 01 00 1D 0D 30 00 00 00 00 00 00 00 00 00 00 DB BC",
-      "response_hex": "A5 5A 01 02 00 1D 0D 30 0B 00 00 00 00 00 00 00 00 00 C3 1D",
+      "request_hex": "A5 5A 02 01 00 1D 0D 30 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 09 71",
+      "response_hex": "A5 5A 02 02 00 1D 0D 30 0B 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 57 71",
       "api_result": {
         "ok": false,
         "error": {
@@ -1427,7 +1485,7 @@
     {
       "name": "unknown_command",
       "request": {
-        "version": 1,
+        "version": 2,
         "kind": 1,
         "tx_id": 30,
         "node": 14,
@@ -1443,10 +1501,11 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
       "response": {
-        "version": 1,
+        "version": 2,
         "kind": 2,
         "tx_id": 30,
         "node": 14,
@@ -1462,10 +1521,11 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
-      "request_hex": "A5 5A 01 01 00 1E 0E FF 00 00 00 00 00 00 00 00 00 00 57 CA",
-      "response_hex": "A5 5A 01 02 00 1E 0E FF 03 00 00 00 00 00 00 00 00 00 05 20",
+      "request_hex": "A5 5A 02 01 00 1E 0E FF 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 C0 03",
+      "response_hex": "A5 5A 02 02 00 1E 0E FF 03 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 6F 6C",
       "api_result": {
         "ok": false,
         "error": {
@@ -1476,7 +1536,7 @@
     {
       "name": "nonzero_reserved_request_data",
       "request": {
-        "version": 1,
+        "version": 2,
         "kind": 1,
         "tx_id": 31,
         "node": 14,
@@ -1492,10 +1552,11 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
       "response": {
-        "version": 1,
+        "version": 2,
         "kind": 2,
         "tx_id": 31,
         "node": 14,
@@ -1511,10 +1572,11 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
-      "request_hex": "A5 5A 01 01 00 1F 0E 30 00 00 00 01 00 00 00 00 00 00 EC 84",
-      "response_hex": "A5 5A 01 02 00 1F 0E 30 02 00 00 00 00 00 00 00 00 00 69 4A",
+      "request_hex": "A5 5A 02 01 00 1F 0E 30 00 00 00 01 00 00 00 00 00 00 00 00 00 00 00 00 00 01 42 95",
+      "response_hex": "A5 5A 02 02 00 1F 0E 30 02 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 B3 37",
       "api_result": {
         "ok": false,
         "error": {
@@ -1525,7 +1587,7 @@
     {
       "name": "unsupported_version",
       "request": {
-        "version": 2,
+        "version": 3,
         "kind": 1,
         "tx_id": 32,
         "node": 14,
@@ -1541,10 +1603,11 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
       "response": {
-        "version": 1,
+        "version": 2,
         "kind": 2,
         "tx_id": 32,
         "node": 14,
@@ -1560,10 +1623,11 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
-      "request_hex": "A5 5A 02 01 00 20 0E 30 00 00 00 00 00 00 00 00 00 00 46 26",
-      "response_hex": "A5 5A 01 02 00 20 0E 30 08 00 00 00 00 00 00 00 00 00 07 05",
+      "request_hex": "A5 5A 03 01 00 20 0E 30 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 9E EA",
+      "response_hex": "A5 5A 02 02 00 20 0E 30 08 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 F7 9B",
       "api_result": {
         "ok": false,
         "error": {
@@ -1574,7 +1638,7 @@
     {
       "name": "nonzero_request_status",
       "request": {
-        "version": 1,
+        "version": 2,
         "kind": 1,
         "tx_id": 33,
         "node": 14,
@@ -1590,10 +1654,11 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
       "response": {
-        "version": 1,
+        "version": 2,
         "kind": 2,
         "tx_id": 33,
         "node": 14,
@@ -1609,10 +1674,11 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
-      "request_hex": "A5 5A 01 01 00 21 0E 30 01 00 00 00 00 00 00 00 00 00 84 4D",
-      "response_hex": "A5 5A 01 02 00 21 0E 30 02 00 00 00 00 00 00 00 00 00 D6 A7",
+      "request_hex": "A5 5A 02 01 00 21 0E 30 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 8C 2E",
+      "response_hex": "A5 5A 02 02 00 21 0E 30 02 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 23 41",
       "api_result": {
         "ok": false,
         "error": {
@@ -1623,7 +1689,7 @@
     {
       "name": "downstream_timeout_mutation",
       "request": {
-        "version": 1,
+        "version": 2,
         "kind": 1,
         "tx_id": 34,
         "node": 14,
@@ -1639,10 +1705,11 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
       "response": {
-        "version": 1,
+        "version": 2,
         "kind": 2,
         "tx_id": 34,
         "node": 14,
@@ -1658,10 +1725,11 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
-      "request_hex": "A5 5A 01 01 00 22 0E 32 00 04 64 00 00 00 00 00 00 00 9A 24",
-      "response_hex": "A5 5A 01 02 00 22 0E 32 07 04 00 00 00 00 00 00 00 00 E7 2E",
+      "request_hex": "A5 5A 02 01 00 22 0E 32 00 04 64 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 B7 5D",
+      "response_hex": "A5 5A 02 02 00 22 0E 32 07 04 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 A2 7B",
       "origin": "gateway or hub",
       "api_result": {
         "ok": false,
@@ -1674,7 +1742,7 @@
     {
       "name": "downstream_overflow_mutation",
       "request": {
-        "version": 1,
+        "version": 2,
         "kind": 1,
         "tx_id": 35,
         "node": 14,
@@ -1690,10 +1758,11 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
       "response": {
-        "version": 1,
+        "version": 2,
         "kind": 2,
         "tx_id": 35,
         "node": 14,
@@ -1709,10 +1778,11 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
-      "request_hex": "A5 5A 01 01 00 23 0E 32 00 04 64 00 00 00 00 00 00 00 DF 47",
-      "response_hex": "A5 5A 01 02 00 23 0E 32 0C 04 00 00 00 00 00 00 00 00 59 C9",
+      "request_hex": "A5 5A 02 01 00 23 0E 32 00 04 64 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 62 AB",
+      "response_hex": "A5 5A 02 02 00 23 0E 32 0C 04 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 86 90",
       "origin": "gateway or hub",
       "api_result": {
         "ok": false,
@@ -1725,7 +1795,7 @@
     {
       "name": "bmp280_third_temperature",
       "request": {
-        "version": 1,
+        "version": 2,
         "kind": 1,
         "tx_id": 135,
         "node": 13,
@@ -1741,10 +1811,11 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
       "response": {
-        "version": 1,
+        "version": 2,
         "kind": 2,
         "tx_id": 135,
         "node": 13,
@@ -1760,10 +1831,11 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
-      "request_hex": "A5 5A 01 01 00 87 0D 20 00 02 00 00 00 00 00 00 00 00 6A 6E",
-      "response_hex": "A5 5A 01 02 00 87 0D 20 00 02 00 00 09 CC 03 00 00 00 E2 E6",
+      "request_hex": "A5 5A 02 01 00 87 0D 20 00 02 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 D4 72",
+      "response_hex": "A5 5A 02 02 00 87 0D 20 00 02 00 00 09 CC 03 00 00 00 00 00 00 00 00 00 00 01 0F 7D",
       "api_result": {
         "ok": true,
         "value": 25.08,
@@ -1776,7 +1848,7 @@
     {
       "name": "sgp40_voc_index_fresh",
       "request": {
-        "version": 1,
+        "version": 2,
         "kind": 1,
         "tx_id": 136,
         "node": 13,
@@ -1792,10 +1864,11 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
       "response": {
-        "version": 1,
+        "version": 2,
         "kind": 2,
         "tx_id": 136,
         "node": 13,
@@ -1811,10 +1884,11 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
-      "request_hex": "A5 5A 01 01 00 88 0D 21 00 00 00 00 00 00 00 00 00 00 B5 12",
-      "response_hex": "A5 5A 01 02 00 88 0D 21 00 00 00 00 00 64 03 00 00 00 5D 31",
+      "request_hex": "A5 5A 02 01 00 88 0D 21 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 ED 5F",
+      "response_hex": "A5 5A 02 02 00 88 0D 21 00 00 00 00 00 64 03 00 00 00 00 00 00 00 00 00 00 01 35 C8",
       "api_result": {
         "ok": true,
         "value": 100,
@@ -1827,7 +1901,7 @@
     {
       "name": "sgp40_voc_index_retained",
       "request": {
-        "version": 1,
+        "version": 2,
         "kind": 1,
         "tx_id": 137,
         "node": 13,
@@ -1843,10 +1917,11 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
       "response": {
-        "version": 1,
+        "version": 2,
         "kind": 2,
         "tx_id": 137,
         "node": 13,
@@ -1862,10 +1937,11 @@
           3,
           232,
           0
-        ]
+        ],
+        "session_id": 1
       },
-      "request_hex": "A5 5A 01 01 00 89 0D 21 00 01 00 00 00 00 00 00 00 00 1B 52",
-      "response_hex": "A5 5A 01 02 00 89 0D 21 00 01 00 00 01 F4 01 03 E8 00 BD 78",
+      "request_hex": "A5 5A 02 01 00 89 0D 21 00 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 28 4B",
+      "response_hex": "A5 5A 02 02 00 89 0D 21 00 01 00 00 01 F4 01 03 E8 00 00 00 00 00 00 00 00 01 B3 D1",
       "api_result": {
         "ok": true,
         "value": 500,
@@ -1878,7 +1954,7 @@
     {
       "name": "dht11_humidity_third",
       "request": {
-        "version": 1,
+        "version": 2,
         "kind": 1,
         "tx_id": 138,
         "node": 13,
@@ -1894,10 +1970,11 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
       "response": {
-        "version": 1,
+        "version": 2,
         "kind": 2,
         "tx_id": 138,
         "node": 13,
@@ -1913,10 +1990,11 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
-      "request_hex": "A5 5A 01 01 00 8A 0D 24 00 02 00 00 00 00 00 00 00 00 70 BD",
-      "response_hex": "A5 5A 01 02 00 8A 0D 24 00 02 00 00 15 AE 03 00 00 00 B4 0D",
+      "request_hex": "A5 5A 02 01 00 8A 0D 24 00 02 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 E1 56",
+      "response_hex": "A5 5A 02 02 00 8A 0D 24 00 02 00 00 15 AE 03 00 00 00 00 00 00 00 00 00 00 01 17 1E",
       "api_result": {
         "ok": true,
         "value": 55.5,
@@ -1929,7 +2007,7 @@
     {
       "name": "dht11_humidity_stale",
       "request": {
-        "version": 1,
+        "version": 2,
         "kind": 1,
         "tx_id": 139,
         "node": 13,
@@ -1945,10 +2023,11 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
       "response": {
-        "version": 1,
+        "version": 2,
         "kind": 2,
         "tx_id": 139,
         "node": 13,
@@ -1964,10 +2043,11 @@
           255,
           254,
           0
-        ]
+        ],
+        "session_id": 1
       },
-      "request_hex": "A5 5A 01 01 00 8B 0D 24 00 00 00 00 00 00 00 00 00 00 F3 B9",
-      "response_hex": "A5 5A 01 02 00 8B 0D 24 00 00 00 00 27 10 01 FF FE 00 60 96",
+      "request_hex": "A5 5A 02 01 00 8B 0D 24 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 15 64",
+      "response_hex": "A5 5A 02 02 00 8B 0D 24 00 00 00 00 27 10 01 FF FE 00 00 00 00 00 00 00 00 01 F9 3B",
       "api_result": {
         "ok": true,
         "value": 100,
@@ -1980,7 +2060,7 @@
     {
       "name": "dust_not_implemented",
       "request": {
-        "version": 1,
+        "version": 2,
         "kind": 1,
         "tx_id": 140,
         "node": 13,
@@ -1996,10 +2076,11 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
       "response": {
-        "version": 1,
+        "version": 2,
         "kind": 2,
         "tx_id": 140,
         "node": 13,
@@ -2015,10 +2096,11 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
-      "request_hex": "A5 5A 01 01 00 8C 0D 25 00 01 00 00 00 00 00 00 00 00 0A DB",
-      "response_hex": "A5 5A 01 02 00 8C 0D 25 04 01 00 00 00 00 00 00 00 00 44 CB",
+      "request_hex": "A5 5A 02 01 00 8C 0D 25 00 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 D2 19",
+      "response_hex": "A5 5A 02 02 00 8C 0D 25 04 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 8D A3",
       "api_result": {
         "ok": false,
         "error": {
@@ -2030,7 +2112,7 @@
     {
       "name": "humidity_invalid_index",
       "request": {
-        "version": 1,
+        "version": 2,
         "kind": 1,
         "tx_id": 141,
         "node": 13,
@@ -2046,10 +2128,11 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
       "response": {
-        "version": 1,
+        "version": 2,
         "kind": 2,
         "tx_id": 141,
         "node": 13,
@@ -2065,22 +2148,131 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
-      "request_hex": "A5 5A 01 01 00 8D 0D 24 00 03 00 00 00 00 00 00 00 00 51 96",
-      "response_hex": "A5 5A 01 02 00 8D 0D 24 01 03 00 00 00 00 00 00 00 00 DD F6",
+      "request_hex": "A5 5A 02 01 00 8D 0D 24 00 03 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 F8 34",
+      "response_hex": "A5 5A 02 02 00 8D 0D 24 01 03 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 A7 18",
       "api_result": {
         "ok": false,
         "error": {
           "code": "INVALID_INDEX"
         }
       }
+    },
+    {
+      "name": "gp2y_raw_adc_voltage_0",
+      "request": {
+        "version": 2,
+        "kind": 1,
+        "tx_id": 500,
+        "node": 13,
+        "command": 37,
+        "status": 0,
+        "idx": 0,
+        "data": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "session_id": 1
+      },
+      "response": {
+        "version": 2,
+        "kind": 2,
+        "tx_id": 500,
+        "node": 13,
+        "command": 37,
+        "status": 0,
+        "idx": 0,
+        "data": [
+          2,
+          0,
+          9,
+          198,
+          3,
+          0,
+          0,
+          0
+        ],
+        "session_id": 1
+      },
+      "request_hex": "A5 5A 02 01 01 F4 0D 25 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 F8 55",
+      "response_hex": "A5 5A 02 02 01 F4 0D 25 00 00 02 00 09 C6 03 00 00 00 00 00 00 00 00 00 00 01 E2 AF",
+      "api_result": {
+        "ok": true,
+        "adc": 512,
+        "voltage": 2.502,
+        "unit": "V",
+        "valid": true,
+        "fresh": true,
+        "age_ms": 0
+      }
+    },
+    {
+      "name": "gp2y_raw_adc_voltage_1",
+      "request": {
+        "version": 2,
+        "kind": 1,
+        "tx_id": 501,
+        "node": 13,
+        "command": 37,
+        "status": 0,
+        "idx": 1,
+        "data": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "session_id": 1
+      },
+      "response": {
+        "version": 2,
+        "kind": 2,
+        "tx_id": 501,
+        "node": 13,
+        "command": 37,
+        "status": 0,
+        "idx": 1,
+        "data": [
+          3,
+          255,
+          19,
+          136,
+          1,
+          0,
+          10,
+          0
+        ],
+        "session_id": 1
+      },
+      "request_hex": "A5 5A 02 01 01 F5 0D 25 00 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 3D 41",
+      "response_hex": "A5 5A 02 02 01 F5 0D 25 00 01 03 FF 13 88 01 00 0A 00 00 00 00 00 00 00 00 01 EA 5C",
+      "api_result": {
+        "ok": true,
+        "adc": 1023,
+        "voltage": 5.0,
+        "unit": "V",
+        "valid": true,
+        "fresh": false,
+        "age_ms": 10
+      }
     }
   ],
   "negative_frames": [
     {
       "name": "corrupted_request_crc",
-      "input_hex": "A5 5A 01 01 00 10 0E 32 00 02 65 00 00 00 00 00 00 00 71 B6",
+      "input_hex": "A5 5A 02 01 00 10 0E 32 00 02 65 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 45 8F",
       "expected": "drop_without_execution_or_response",
       "matches_request_case": "set_pwm_normal"
     },
@@ -2093,14 +2285,14 @@
     },
     {
       "name": "unsupported_kind",
-      "input_hex": "A5 5A 01 03 00 10 0E 32 00 02 64 00 00 00 00 00 00 00 3C 6F",
+      "input_hex": "A5 5A 02 03 00 10 0E 32 00 02 64 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 27 BC",
       "expected": "drop_without_execution_or_response"
     },
     {
       "name": "late_response_id",
-      "input_hex": "A5 5A 01 02 00 0F 0E 32 00 02 64 00 00 00 00 00 00 00 45 75",
+      "input_hex": "A5 5A 02 02 00 0F 0E 32 00 02 64 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 0A 8C",
       "pending_request": {
-        "version": 1,
+        "version": 2,
         "kind": 1,
         "tx_id": 16,
         "node": 14,
@@ -2116,15 +2308,16 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
       "expected": "ignore_without_finishing_pending_request"
     },
     {
       "name": "mismatched_response_command",
-      "input_hex": "A5 5A 01 02 00 10 0E 30 00 02 64 00 00 00 00 00 00 00 32 20",
+      "input_hex": "A5 5A 02 02 00 10 0E 30 00 02 64 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 EE A8",
       "pending_request": {
-        "version": 1,
+        "version": 2,
         "kind": 1,
         "tx_id": 16,
         "node": 14,
@@ -2140,15 +2333,16 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
       "expected": "ignore_without_finishing_pending_request"
     },
     {
       "name": "invalid_response_flags",
-      "input_hex": "A5 5A 01 02 00 03 0D 20 00 00 00 00 08 4D 02 13 88 00 A7 1B",
+      "input_hex": "A5 5A 02 02 00 03 0D 20 00 00 00 00 08 4D 02 13 88 00 00 00 00 00 00 00 00 01 74 81",
       "pending_request": {
-        "version": 1,
+        "version": 2,
         "kind": 1,
         "tx_id": 3,
         "node": 13,
@@ -2164,17 +2358,43 @@
           0,
           0,
           0
-        ]
+        ],
+        "session_id": 1
       },
       "expected": "reject_semantically_invalid_response"
     },
     {
       "name": "recovery_after_lost_byte",
-      "input_hex": "A5 5A 01 01 00 10 0E 32 00 02 64 00 00 00 00 00 00 71 B6 A5 5A 01 01 00 01 0D 20 00 00 00 00 00 00 00 00 00 00 96 C2",
+      "input_hex": "A5 5A 01 01 00 10 0E 32 00 02 64 00 00 00 00 00 00 71 B6 A5 5A 02 01 00 01 0D 20 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 1F 2C",
       "expected_valid_frames": [
-        "A5 5A 01 01 00 01 0D 20 00 00 00 00 00 00 00 00 00 00 96 C2"
+        "A5 5A 02 01 00 01 0D 20 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 1F 2C"
       ],
       "expected": "recover_next_complete_crc_valid_frame"
+    },
+    {
+      "name": "late_response_from_previous_session",
+      "pending_request": {
+        "version": 2,
+        "kind": 1,
+        "tx_id": 1,
+        "node": 13,
+        "command": 32,
+        "status": 0,
+        "idx": 0,
+        "data": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "session_id": 1
+      },
+      "input_hex": "A5 5A 02 02 00 01 0D 20 00 00 00 00 09 F6 03 00 00 00 00 00 00 00 00 00 00 02 4E 00",
+      "expected": "ignore_without_finishing_pending_request"
     }
   ],
   "serial_envelopes": [

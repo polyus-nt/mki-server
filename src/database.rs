@@ -19,6 +19,11 @@ impl Database {
         connection.execute_batch(
             "
             PRAGMA foreign_keys = ON;
+            PRAGMA synchronous = FULL;
+            CREATE TABLE IF NOT EXISTS hardware_decisions_v2 (
+              decision_id TEXT PRIMARY KEY, command_json TEXT NOT NULL,
+              outcome_json TEXT
+            );
             CREATE TABLE IF NOT EXISTS runs (
               id INTEGER PRIMARY KEY, started_wall_clock_ms INTEGER NOT NULL
             );
@@ -56,6 +61,35 @@ impl Database {
         })
     }
 
+    pub fn decision(&self, id: &str) -> Result<Option<(String, Option<String>)>> {
+        use rusqlite::OptionalExtension;
+        self.connection
+            .lock()
+            .unwrap()
+            .query_row(
+                "SELECT command_json, outcome_json FROM hardware_decisions_v2 WHERE decision_id=?",
+                [id],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .optional()
+    }
+    pub fn reserve_decision(&self, id: &str, command: &str) -> Result<()> {
+        self.connection.lock().unwrap().execute(
+            "INSERT INTO hardware_decisions_v2(decision_id, command_json) VALUES(?,?)",
+            params![id, command],
+        )?;
+        Ok(())
+    }
+    pub fn finish_decision(&self, id: &str, outcome: &str) -> Result<()> {
+        let changed = self.connection.lock().unwrap().execute(
+            "UPDATE hardware_decisions_v2 SET outcome_json=? WHERE decision_id=?",
+            params![outcome, id],
+        )?;
+        if changed != 1 {
+            return Err(rusqlite::Error::QueryReturnedNoRows);
+        }
+        Ok(())
+    }
     pub fn record_telemetry(&self, monotonic_ms: i64, raw: &[u8], state: &SystemState) {
         let decoded = serde_json::to_string(state).unwrap_or_else(|_| "{}".to_owned());
         let _ = self
@@ -123,7 +157,7 @@ impl Database {
                     AVG(json_extract(decoded_json, ?4)), MIN(json_extract(decoded_json, ?4)),
                     MAX(json_extract(decoded_json, ?4))
              FROM telemetry WHERE run_id = ?2 AND wall_clock_ms >= ?3
-             AND length(raw) = 20 AND substr(raw, 8, 1) = X'20' AND substr(raw, 10, 1) = ?5
+             AND length(raw) = 28 AND substr(raw, 8, 1) = X'20' AND substr(raw, 10, 1) = ?5
              GROUP BY bucket ORDER BY bucket",
         ) else {
             return Vec::new();

@@ -8,8 +8,8 @@ import struct
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SPEC = json.loads((ROOT / "docs/protocol/hardware-v1.json").read_text())
-VECTORS = json.loads((ROOT / "docs/protocol/hardware-v1-vectors.json").read_text())
+SPEC = json.loads((ROOT / "docs/protocol/hardware-v2.json").read_text())
+VECTORS = json.loads((ROOT / "docs/protocol/hardware-v2-vectors.json").read_text())
 COMMANDS = {row["code"]: row for row in SPEC["commands"]}
 STATUS_NAMES = {value: name for name, value in SPEC["status_codes"].items()}
 
@@ -21,11 +21,11 @@ def check(condition, message):
 
 def parse_frame(hex_text, *, check_crc=True):
     raw = bytes.fromhex(hex_text)
-    check(len(raw) == 20, "frame must contain exactly 20 bytes")
+    check(len(raw) == 28, "frame must contain exactly 28 bytes")
     check(raw[:2] == bytes([0xA5, 0x5A]), "invalid magic")
     if check_crc:
         check(
-            binascii.crc_hqx(raw[2:18], 0xFFFF) == int.from_bytes(raw[18:], "big"),
+            binascii.crc_hqx(raw[2:26], 0xFFFF) == int.from_bytes(raw[26:], "big"),
             "CRC does not match",
         )
     return {
@@ -37,15 +37,16 @@ def parse_frame(hex_text, *, check_crc=True):
         "status": raw[8],
         "idx": raw[9],
         "data": list(raw[10:18]),
+        "session_id": int.from_bytes(raw[18:26], "big"),
     }
 
 
 def correlation(fields):
-    return tuple(fields[name] for name in ("tx_id", "node", "command", "idx"))
+    return tuple(fields[name] for name in ("session_id", "tx_id", "node", "command", "idx"))
 
 
 def request_error(request):
-    if request["version"] != 1:
+    if request["version"] != 2:
         return 8
     if request["status"] != 0:
         return 2
@@ -80,12 +81,17 @@ def api_result(case):
         return result
     data = bytes(response["data"])
     command = response["command"]
-    if command in (0x20, 0x21, 0x23, 0x24):
+    if command in (0x20, 0x21, 0x23, 0x24, 0x25):
         flags = data[4]
         check(flags in (1, 3), "successful measurement must be valid")
         check(data[7] == 0, "measurement padding must be zero")
         age = int.from_bytes(data[5:7], "big")
         check(age <= 65534, "measurement age exceeds saturation limit")
+        if command == 0x25:
+            adc, mv = struct.unpack(">HH", data[:4])
+            check(adc <= 1023, "dust ADC range")
+            return {"ok": True, "adc": adc, "voltage": mv / 1000, "unit": "V",
+                    "valid": True, "fresh": bool(flags & 2), "age_ms": age}
         value = struct.unpack(">i" if command == 0x20 else ">I", data[:4])[0]
         if command == 0x21:
             check(1 <= value <= 500, "VOC Index range")
@@ -122,8 +128,8 @@ def valid_stream_frames(hex_text):
     raw = bytes.fromhex(hex_text)
     found = []
     offset = 0
-    while offset + 20 <= len(raw):
-        candidate = raw[offset:offset + 20]
+    while offset + 28 <= len(raw):
+        candidate = raw[offset:offset + 28]
         try:
             parsed = parse_frame(candidate.hex())
             check(parsed["kind"] in (1, 2), "unknown kind")
@@ -131,18 +137,18 @@ def valid_stream_frames(hex_text):
             offset += 1
             continue
         found.append(candidate)
-        offset += 20
+        offset += 28
     return found
 
 
 def main():
-    check(SPEC["protocol_version"] == VECTORS["protocol_version"] == 1, "version mismatch")
+    check(SPEC["protocol_version"] == VECTORS["protocol_version"] == 2, "version mismatch")
     covered = []
     for field in SPEC["fields"]:
         covered.extend(range(field["offset"], field["offset"] + field["size"]))
-    check(covered == list(range(20)), "field layout has gaps or overlaps")
+    check(covered == list(range(28)), "field layout has gaps or overlaps")
     check(len(COMMANDS) == 11, "eleven distinct commands are required")
-    check(sum(c["access"] == "user" for c in COMMANDS.values()) == 9, "nine User wire commands, dust not exported in MCP")
+    check(sum(c["access"] == "user" for c in COMMANDS.values()) == 9, "nine User wire commands, including dust ADC/voltage")
     check(all(COMMANDS[c]["access"] == "admin" for c in (0x40, 0x41)), "Admin boundary")
     check(0x42 not in COMMANDS, "locks are not routed through Arduino")
     check(binascii.crc_hqx(b"123456789", 0xFFFF) == SPEC["crc"]["check"] == 0x29B1, "CRC check")
@@ -157,7 +163,7 @@ def main():
         check(request == case["request"], f'{case["name"]}: request bytes/fields differ')
         check(response == case["response"], f'{case["name"]}: response bytes/fields differ')
         check(request["kind"] == 1 and response["kind"] == 2, "wrong request/response kinds")
-        check(response["version"] == 1, "wrong response version")
+        check(response["version"] == 2, "wrong response version")
         check(correlation(request) == correlation(response), "response correlation mismatch")
         validation_error = request_error(request)
         if validation_error:
@@ -172,9 +178,9 @@ def main():
         expected = case["expected"]
         raw = bytes.fromhex(case["input_hex"])
         if case["name"] == "corrupted_request_crc":
-            check(binascii.crc_hqx(raw[2:18], 0xFFFF) != int.from_bytes(raw[18:], "big"), "bad CRC case")
+            check(binascii.crc_hqx(raw[2:26], 0xFFFF) != int.from_bytes(raw[26:], "big"), "bad CRC case")
         elif expected == "discard_partial_candidate":
-            check(len(raw) < 20 and case["advance_ms"] > SPEC["timeouts_ms"]["inter_byte"], "partial frame")
+            check(len(raw) < 28 and case["advance_ms"] > SPEC["timeouts_ms"]["inter_byte"], "partial frame")
         elif case["name"] == "unsupported_kind":
             check(parse_frame(raw.hex())["kind"] not in (1, 2), "bad kind case")
         elif expected == "ignore_without_finishing_pending_request":
