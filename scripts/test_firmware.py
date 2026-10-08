@@ -23,6 +23,8 @@ def main():
         ROOT.parent / "arduino-actuator/test/hardware_api_test.cpp",
         ROOT.parent / "arduino-sensor/test/hardware_api_test.cpp",
         ROOT.parent / "arduino-sensor/test/bmp280_test.cpp",
+        ROOT.parent / "arduino-sensor/test/voc_sensor_test.cpp",
+        ROOT.parent / "arduino-sensor/test/sensor_board_test.cpp",
         ROOT.parent / "arduino-sensor/test/softwarewire_test.cpp",
         ROOT / "firmware/tests/gateway_arduino_test.cpp",
     ]
@@ -46,8 +48,34 @@ def main():
             if source.name == "softwarewire_test.cpp":
                 extra = ["-I" + str(source.parent / "mock"),
                          str(source.parents[1] / "src/softwarewire/SoftwareWire.cpp")]
+            if source.name in ("voc_sensor_test.cpp", "sensor_board_test.cpp"):
+                c_compiler = shutil.which("gcc")
+                if not c_compiler:
+                    raise SystemExit("gcc is required for the Sensirion C algorithm")
+                algorithm = source.parents[1] / "src/sensirion/sensirion_gas_index_algorithm.c"
+                object_file = str(Path(directory) / "sensirion.o")
+                c_flags = [flag for flag in flags if not flag.startswith("-std=")]
+                subprocess.run([c_compiler, "-std=c99", *c_flags, "-c", str(algorithm),
+                                "-o", object_file], check=True)
+                extra = [object_file]
+            if source.name == "sensor_board_test.cpp":
+                extra += ["-I" + str(source.parent / "mock"),
+                          '-DHARDWARE_API_BOARD_HEADER="test/compile_only_sensors.h"']
             subprocess.run([compiler, *flags, *extra, str(source), "-o", binary], check=True)
             subprocess.run([binary], check=True, env=environment)
+            if source.name == "sensor_board_test.cpp":
+                conflict_binary = binary + "-conflict"
+                conflict_extra = [arg for arg in extra if not arg.startswith("-DHARDWARE_API_BOARD_HEADER")]
+                conflict_extra += ['-DHARDWARE_API_BOARD_HEADER="test/conflicting_sensors.h"',
+                                   "-DTEST_CONFLICT", "-DTEST_EXPECT_BUS_COUNT=3"]
+                subprocess.run([compiler, *flags, *conflict_extra, str(source),
+                                "-o", conflict_binary], check=True)
+                subprocess.run([conflict_binary], check=True, env=environment)
+                unconfigured_binary = binary + "-unconfigured"
+                subprocess.run([compiler, *flags, object_file,
+                                "-I" + str(source.parent / "mock"), "-DTEST_UNCONFIGURED",
+                                str(source), "-o", unconfigured_binary], check=True)
+                subprocess.run([unconfigured_binary], check=True, env=environment)
             binaries.append(binary)
         vectors = json.loads((ROOT / "docs/protocol/hardware-v1-vectors.json").read_text())
         for case in vectors["round_trips"]:

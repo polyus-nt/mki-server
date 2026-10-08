@@ -17,6 +17,10 @@ struct Fans : FanHardware {
 struct Sensors : SensorHardware {
   Status temperature(uint8_t, Measurement&) override { return NOT_IMPLEMENTED; }
   Status pressure(uint8_t, Measurement&) override { return NOT_IMPLEMENTED; }
+  Status voc(uint8_t idx, Measurement& result) override {
+    result.value = idx == 0 ? 100 : 230; result.flags = 3; result.ageMs = 12;
+    return OK;
+  }
   Status door(uint8_t idx, bool& closed) override { closed = idx == 0; return OK; }
   Status unsupported(uint8_t, uint8_t) override { return NOT_IMPLEMENTED; }
 };
@@ -75,6 +79,12 @@ int main() {
   assert(exchange(gateway13, actuator, sensors, request(13, kGetTemp, 2), now).status == NOT_IMPLEMENTED);
   assert(exchange(gateway13, actuator, sensors, request(13, kGetTemp, 3), now).status == INVALID_INDEX);
   assert(exchange(gateway13, actuator, sensors, request(13, kGetDoor, 1), now).data[0] == 0);
+  for (uint8_t idx = 0; idx < 2; ++idx) {
+    reply = exchange(gateway13, actuator, sensors, request(13, kGetVoc, idx), now);
+    assert(reply.status == OK && readU32(reply.data) == (idx == 0 ? 100U : 230U));
+    assert(reply.data[4] == 3 && readU16(reply.data + 5) == 12 && reply.data[7] == 0);
+  }
+  assert(exchange(gateway13, actuator, sensors, request(13, kGetVoc, 2), now).status == INVALID_INDEX);
   unsigned writes = fans.writes;
   exchange(gateway14, actuator, sensors, request(14, kSetPwm, 3, 100), now, true);
   assert(fans.writes == writes + 1 && fans.pwm[3] == 230);
