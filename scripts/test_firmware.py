@@ -22,11 +22,14 @@ def main():
         ROOT / "firmware/tests/protocol_test.cpp",
         ROOT.parent / "arduino-actuator/test/hardware_api_test.cpp",
         ROOT.parent / "arduino-sensor/test/hardware_api_test.cpp",
+        ROOT.parent / "arduino-sensor/test/bmp280_test.cpp",
+        ROOT.parent / "arduino-sensor/test/softwarewire_test.cpp",
         ROOT / "firmware/tests/gateway_arduino_test.cpp",
     ]
     canonical = (ROOT / "firmware/common/HardwareProtocol.h").read_bytes()
     for repository in ("arduino-actuator", "arduino-sensor", "tjc-sketch"):
-        header = ROOT.parent / repository / "firmware/common/HardwareProtocol.h"
+        folder = "firmware" if repository == "tjc-sketch" else "src"
+        header = ROOT.parent / repository / folder / "common/HardwareProtocol.h"
         if header.read_bytes() != canonical:
             raise SystemExit(f"common header differs in {repository}")
     with tempfile.TemporaryDirectory(prefix="hardware-api-tests-") as directory:
@@ -39,7 +42,11 @@ def main():
             environment["ASAN_OPTIONS"] = "detect_leaks=0"
         for index, source in enumerate(sources):
             binary = str(Path(directory) / f"suite-{index}")
-            subprocess.run([compiler, *flags, str(source), "-o", binary], check=True)
+            extra = []
+            if source.name == "softwarewire_test.cpp":
+                extra = ["-I" + str(source.parent / "mock"),
+                         str(source.parents[1] / "src/softwarewire/SoftwareWire.cpp")]
+            subprocess.run([compiler, *flags, *extra, str(source), "-o", binary], check=True)
             subprocess.run([binary], check=True, env=environment)
             binaries.append(binary)
         vectors = json.loads((ROOT / "docs/protocol/hardware-v1-vectors.json").read_text())

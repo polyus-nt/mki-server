@@ -1,7 +1,7 @@
 #include <assert.h>
 #include <stdio.h>
-#include "../../../arduino-actuator/firmware/ActuatorApi.h"
-#include "../../../arduino-sensor/firmware/SensorApi.h"
+#include "../../../arduino-actuator/src/ActuatorApi.h"
+#include "../../../arduino-sensor/src/SensorApi.h"
 #include "../../../tjc-sketch/firmware/gateway/Gateway.h"
 using namespace hardware_api;
 using tjc_gateway::Gateway;
