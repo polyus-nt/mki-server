@@ -1,42 +1,45 @@
-use std::sync::{Arc, RwLock};
-
+use crate::serial::Command;
 use serde::Serialize;
-
+use serde_json::Value;
+use std::sync::{Arc, RwLock};
 #[derive(Clone, Debug, Default, Serialize)]
 pub struct SystemState {
+    pub connected: bool,
     pub received_wall_clock_ms: i64,
-    pub inside_c: Option<f64>,
-    pub outside_c: Option<f64>,
-    pub inside_valid: bool,
-    pub inside_fresh: bool,
-    pub outside_valid: bool,
-    pub outside_fresh: bool,
-    pub target_c: u8,
-    pub door_open: bool,
-    pub door_stage: u8,
-    pub mode: u8,
-    pub door_policy: u8,
-    pub stable_version: u16,
-    pub candidate_version: Option<u16>,
-    pub pwm: [u8; 4],
-    pub rpm: [u32; 4],
-    pub failed_mask: u8,
-    pub kp_milli: u16,
-    pub ki_milli: u16,
-    pub kd_milli: u16,
-    pub weights: [u8; 4],
-    pub limited_pwm: u8,
+    pub temperature: [Option<Value>; 3],
+    pub pressure: [Option<Value>; 3],
+    pub voc: [Option<Value>; 2],
+    pub humidity: [Option<Value>; 3],
+    pub doors: [Option<Value>; 2],
+    pub pwm: [Option<Value>; 6],
+    pub rpm: [Option<Value>; 6],
 }
-
 #[derive(Clone, Default)]
 pub struct SharedState(Arc<RwLock<SystemState>>);
-
 impl SharedState {
     pub fn snapshot(&self) -> SystemState {
-        self.0.read().expect("system state lock poisoned").clone()
+        self.0.read().expect("state lock poisoned").clone()
     }
-
-    pub fn replace(&self, next: SystemState) {
-        *self.0.write().expect("system state lock poisoned") = next;
+    pub fn set_connected(&self, c: bool) {
+        self.0.write().unwrap().connected = c;
+    }
+    pub fn apply(&self, c: &Command, r: &Value) {
+        let mut s = self.0.write().unwrap();
+        s.received_wall_clock_ms = crate::database::wall_clock_ms();
+        // Include reception time: a device age alone does not age the GUI cache.
+        let mut sample = r.clone();
+        sample["received_wall_clock_ms"] = s.received_wall_clock_ms.into();
+        match *c {
+            Command::Temperature(i) => s.temperature[usize::from(i)] = Some(sample),
+            Command::Pressure(i) => s.pressure[usize::from(i)] = Some(sample),
+            Command::Voc(i) => s.voc[usize::from(i)] = Some(sample),
+            Command::Humidity(i) => s.humidity[usize::from(i)] = Some(sample),
+            Command::Door(i) => s.doors[usize::from(i)] = Some(sample),
+            Command::Pwm(i) | Command::SetPwm { idx: i, .. } => {
+                s.pwm[usize::from(i)] = Some(sample)
+            }
+            Command::Rpm(i) => s.rpm[usize::from(i)] = Some(sample),
+            _ => {}
+        }
     }
 }

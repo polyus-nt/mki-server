@@ -29,6 +29,9 @@ def main():
         ROOT.parent / "arduino-sensor/test/sensor_board_test.cpp",
         ROOT.parent / "arduino-sensor/test/softwarewire_test.cpp",
         ROOT / "firmware/tests/gateway_arduino_test.cpp",
+        ROOT.parent / "tjc-sketch/tests/gateway_test.cpp",
+        ROOT.parent / "tjc-sketch/tests/hub_test.cpp",
+        ROOT / "firmware/tests/hub_gateway_arduino_test.cpp",
     ]
     canonical = (ROOT / "firmware/common/HardwareProtocol.h").read_bytes()
     for repository in ("arduino-actuator", "arduino-sensor", "tjc-sketch"):

@@ -3344,6 +3344,7 @@ dependencies = [
  "axum",
  "eframe",
  "egui_plot",
+ "libc",
  "rand 0.9.5",
  "rusqlite",
  "serde",

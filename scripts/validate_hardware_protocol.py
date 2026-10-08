@@ -75,22 +75,26 @@ def api_result(case):
         result = {"ok": False, "error": {"code": STATUS_NAMES[status]}}
         if status in (4, 5):
             result["value"] = None
-        if status in (7, 12) and COMMANDS[response["command"]].get("mutating"):
+        if status in (7, 9, 12) and COMMANDS[response["command"]].get("mutating"):
             result["error"]["outcome"] = "unknown"
         return result
     data = bytes(response["data"])
     command = response["command"]
-    if command in (0x20, 0x23):
+    if command in (0x20, 0x21, 0x23, 0x24):
         flags = data[4]
         check(flags in (1, 3), "successful measurement must be valid")
         check(data[7] == 0, "measurement padding must be zero")
         age = int.from_bytes(data[5:7], "big")
         check(age <= 65534, "measurement age exceeds saturation limit")
         value = struct.unpack(">i" if command == 0x20 else ">I", data[:4])[0]
+        if command == 0x21:
+            check(1 <= value <= 500, "VOC Index range")
+        if command == 0x24:
+            check(0 <= value <= 10000, "humidity range")
         return {
             "ok": True,
-            "value": value / 100 if command == 0x20 else value,
-            "unit": "degC" if command == 0x20 else "Pa",
+            "value": value / 100 if command in (0x20, 0x24) else value,
+            "unit": {0x20: "degC", 0x21: "VOC Index", 0x23: "Pa", 0x24: "%RH"}[command],
             "valid": bool(flags & 1),
             "fresh": bool(flags & 2),
             "age_ms": age,
@@ -107,9 +111,6 @@ def api_result(case):
     if command == 0x22:
         check(data[0] in (0, 1), "door state must be bool")
         return {"ok": True, "value": bool(data[0])}
-    if command == 0x42:
-        check(data[0] in (0, 1), "lock state must be bool")
-        return {"ok": True, "applied_lock_state": bool(data[0])}
     if command == 0x32:
         return {"ok": True, "applied_pwm": data[0]}
     check(command == 0x30, "successful result has no defined decoder")
@@ -140,9 +141,10 @@ def main():
     for field in SPEC["fields"]:
         covered.extend(range(field["offset"], field["offset"] + field["size"]))
     check(covered == list(range(20)), "field layout has gaps or overlaps")
-    check(len(COMMANDS) == 10, "ten distinct commands are required")
-    check(sum(c["access"] == "user" for c in COMMANDS.values()) == 7, "seven User commands")
-    check(all(COMMANDS[c]["access"] == "admin" for c in (0x40, 0x41, 0x42)), "Admin boundary")
+    check(len(COMMANDS) == 11, "eleven distinct commands are required")
+    check(sum(c["access"] == "user" for c in COMMANDS.values()) == 9, "nine User wire commands, dust not exported in MCP")
+    check(all(COMMANDS[c]["access"] == "admin" for c in (0x40, 0x41)), "Admin boundary")
+    check(0x42 not in COMMANDS, "locks are not routed through Arduino")
     check(binascii.crc_hqx(b"123456789", 0xFFFF) == SPEC["crc"]["check"] == 0x29B1, "CRC check")
     check(bytes.fromhex(VECTORS["crc_check"]["hex"]) == bytes([0x29, 0xB1]), "vector CRC check")
     tested = set()
@@ -189,7 +191,7 @@ def main():
     print(
         f'Validated {len(VECTORS["round_trips"])} round trips, '
         f'{len(VECTORS["negative_frames"])} negative cases, '
-        f'{len(VECTORS["serial_envelopes"])} serial envelopes; all ten commands covered. '
+        f'{len(VECTORS["serial_envelopes"])} serial envelopes; all eleven commands covered. '
         'Mode sequence is a golden scenario for future firmware tests, not executed here.'
     )
 

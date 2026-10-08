@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "status": "proposed",
+  "status": "experimental_implemented",
   "protocol_version": 1,
   "frame_size": 20,
   "byte_order": "big",
@@ -100,7 +100,10 @@
     "gateway_exchange": 1500,
     "hub_exchange": 3000,
     "host_exchange": 5000,
-    "recovery_quiet": 250
+    "recovery_quiet": 250,
+    "queue_waiting": 30000,
+    "host_recovery_quiet": 1000,
+    "host_recovery_cap": 3000
   },
   "status_codes": {
     "OK": 0,
@@ -126,7 +129,13 @@
     "temperature_unit": "degC",
     "temperature_scale": 100,
     "pressure_unit": "Pa",
-    "voc_unit": null
+    "voc_unit": "VOC Index",
+    "voc_range": [
+      1,
+      500
+    ],
+    "humidity_unit": "%RH",
+    "humidity_scale": 100
   },
   "commands": [
     {
@@ -136,7 +145,8 @@
       "access": "user",
       "idx": [
         0,
-        1
+        1,
+        2
       ],
       "request_data": "zero",
       "response_data": "i32_centidegrees, flags, u16_age_ms, zero"
@@ -151,7 +161,7 @@
         1
       ],
       "request_data": "zero",
-      "response_data": "not_implemented"
+      "response_data": "u32_voc_index_1_to_500, flags, u16_age_ms, zero"
     },
     {
       "code": 34,
@@ -176,8 +186,33 @@
         2
       ],
       "request_data": "zero",
-      "response_data": "u32_pa, flags, u16_age_ms, zero",
-      "driver": "stub"
+      "response_data": "u32_pa, flags, u16_age_ms, zero"
+    },
+    {
+      "code": 36,
+      "name": "get_humidity",
+      "node": 13,
+      "access": "user",
+      "idx": [
+        0,
+        1,
+        2
+      ],
+      "request_data": "zero",
+      "response_data": "u32_centipercent_rh_0_to_10000, flags, u16_age_ms, zero"
+    },
+    {
+      "code": 37,
+      "name": "get_dust",
+      "node": 13,
+      "access": "user",
+      "idx": [
+        0,
+        1
+      ],
+      "request_data": "zero",
+      "response_data": "not_implemented",
+      "mcp_exported": false
     },
     {
       "code": 48,
@@ -255,19 +290,21 @@
       "request_data": "u8_mode, zero",
       "response_data": "u8_mode, u8_active_idx, zero",
       "mutating": true
-    },
-    {
-      "code": 66,
-      "name": "set_door_lock",
-      "node": 14,
-      "access": "admin",
-      "idx": [
-        0,
-        1
-      ],
-      "request_data": "bool_lock_state, zero",
-      "response_data": "bool_applied_lock_state, zero",
-      "mutating": true
     }
-  ]
+  ],
+  "unrouted_devices": {
+    "magnetic_locks": 2,
+    "vacuum": 1,
+    "owner": "МС-ТЮК восьмилампочница",
+    "address": null
+  },
+  "queue": {
+    "max_waiting": 64,
+    "max_retained_decisions": 4096,
+    "max_duplicate_waiters": 64,
+    "max_decision_id_bytes": 128,
+    "automatic_retry": false,
+    "tx_id_reuse_within_process": false,
+    "tx_id_exhaustion": "reject after 65535 admitted requests; explicit operator reconciliation before restart"
+  }
 }
