@@ -21,6 +21,10 @@ struct Sensors : SensorHardware {
     result.value = idx == 0 ? 100 : 230; result.flags = 3; result.ageMs = 12;
     return OK;
   }
+  Status humidity(uint8_t idx, Measurement& result) override {
+    result.value = 5550U + idx; result.flags = 3; result.ageMs = 2000;
+    return OK;
+  }
   Status door(uint8_t idx, bool& closed) override { closed = idx == 0; return OK; }
   Status unsupported(uint8_t, uint8_t) override { return NOT_IMPLEMENTED; }
 };
@@ -85,6 +89,12 @@ int main() {
     assert(reply.data[4] == 3 && readU16(reply.data + 5) == 12 && reply.data[7] == 0);
   }
   assert(exchange(gateway13, actuator, sensors, request(13, kGetVoc, 2), now).status == INVALID_INDEX);
+  for (uint8_t idx = 0; idx < 3; ++idx) {
+    reply = exchange(gateway13, actuator, sensors, request(13, kGetHumidity, idx), now);
+    assert(reply.status == OK && readU32(reply.data) == 5550U + idx);
+    assert(reply.data[4] == 3 && readU16(reply.data + 5) == 2000 && reply.data[7] == 0);
+  }
+  assert(exchange(gateway13, actuator, sensors, request(13, kGetHumidity, 3), now).status == INVALID_INDEX);
   unsigned writes = fans.writes;
   exchange(gateway14, actuator, sensors, request(14, kSetPwm, 3, 100), now, true);
   assert(fans.writes == writes + 1 && fans.pwm[3] == 230);

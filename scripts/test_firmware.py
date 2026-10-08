@@ -23,6 +23,8 @@ def main():
         ROOT.parent / "arduino-actuator/test/hardware_api_test.cpp",
         ROOT.parent / "arduino-sensor/test/hardware_api_test.cpp",
         ROOT.parent / "arduino-sensor/test/bmp280_test.cpp",
+        ROOT.parent / "arduino-sensor/test/dht11_test.cpp",
+        ROOT.parent / "arduino-sensor/test/dht_gpio_test.cpp",
         ROOT.parent / "arduino-sensor/test/voc_sensor_test.cpp",
         ROOT.parent / "arduino-sensor/test/sensor_board_test.cpp",
         ROOT.parent / "arduino-sensor/test/softwarewire_test.cpp",
@@ -48,6 +50,9 @@ def main():
             if source.name == "softwarewire_test.cpp":
                 extra = ["-I" + str(source.parent / "mock"),
                          str(source.parents[1] / "src/softwarewire/SoftwareWire.cpp")]
+            if source.name == "dht_gpio_test.cpp":
+                extra = ["-I" + str(source.parent / "mock"),
+                         str(source.parents[1] / "src/dht/DHT.cpp")]
             if source.name in ("voc_sensor_test.cpp", "sensor_board_test.cpp"):
                 c_compiler = shutil.which("gcc")
                 if not c_compiler:
@@ -76,6 +81,17 @@ def main():
                                 "-I" + str(source.parent / "mock"), "-DTEST_UNCONFIGURED",
                                 str(source), "-o", unconfigured_binary], check=True)
                 subprocess.run([unconfigured_binary], check=True, env=environment)
+                for name, header, variant_flags in (
+                    ("dht", "compile_only_dht.h", []),
+                    ("dht-conflict", "conflicting_dht.h", ["-DTEST_DHT_CONFLICT"]),
+                    ("dht-voc-conflict", "conflicting_dht_voc.h", ["-DTEST_DHT_VOC_CONFLICT"]),
+                ):
+                    variant_binary = binary + "-" + name
+                    subprocess.run([compiler, *flags, object_file,
+                                    "-I" + str(source.parent / "mock"),
+                                    f'-DHARDWARE_API_BOARD_HEADER="test/{header}"',
+                                    *variant_flags, str(source), "-o", variant_binary], check=True)
+                    subprocess.run([variant_binary], check=True, env=environment)
             binaries.append(binary)
         vectors = json.loads((ROOT / "docs/protocol/hardware-v1-vectors.json").read_text())
         for case in vectors["round_trips"]:
