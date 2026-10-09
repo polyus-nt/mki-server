@@ -4,7 +4,7 @@
 
 Уточнение карты стенда (2026-10-09): Arduino Sensor — Uno, Austere
 MISO/MOSI/CLK/CS/IRQ = D9/D10/D11/D12/D13. BMP: SCL D2, SDA D3/D4/D5;
-SGP40: SCL D6, SDA D7/D8; DHT11: A2/A3/A4; пыль: общий LED A5,
+SGP40: SCL D6, SDA D7/D8; DHT11: A3/A4/A5; пыль: общий LED A2,
 ADC A0/A1. Эта карта включена по умолчанию в BoardConfig.h.
 Концевики перенесены на кнопочницу МС-ТЮК: их Arduino-входы отключены;
 маршрутизация get_door_state на кнопочницу пока не реализована.
