@@ -22,6 +22,7 @@ def main():
         ROOT / "firmware/tests/protocol_test.cpp",
         ROOT.parent / "arduino-actuator/test/hardware_api_test.cpp",
         ROOT.parent / "arduino-sensor/test/hardware_api_test.cpp",
+        ROOT.parent / "arduino-sensor/test/diagnostics_test.cpp",
         ROOT.parent / "arduino-sensor/test/bmp280_test.cpp",
         ROOT.parent / "arduino-sensor/test/dht11_test.cpp",
         ROOT.parent / "arduino-sensor/test/dust_test.cpp",
@@ -92,8 +93,14 @@ def main():
                 unconfigured_binary = binary + "-unconfigured"
                 subprocess.run([compiler, *flags, object_file,
                                 "-I" + str(source.parent / "mock"), "-DTEST_UNCONFIGURED",
+                                '-DHARDWARE_API_BOARD_HEADER="test/unconfigured.h"',
                                 str(source), "-o", unconfigured_binary], check=True)
                 subprocess.run([unconfigured_binary], check=True, env=environment)
+                uno_binary = binary + "-uno-map"
+                subprocess.run([compiler, *flags, object_file,
+                                "-I" + str(source.parent / "mock"), "-DTEST_UNO_MAP",
+                                str(source), "-o", uno_binary], check=True)
+                subprocess.run([uno_binary], check=True, env=environment)
                 for name, header, variant_flags in (
                     ("dht", "compile_only_dht.h", []),
                     ("dht-conflict", "conflicting_dht.h", ["-DTEST_DHT_CONFLICT"]),
