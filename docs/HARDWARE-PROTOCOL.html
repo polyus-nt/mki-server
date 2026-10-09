@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>МС-ТЮК — рабочий протокол v2 и TEST-консоль</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { max-width: 1040px; margin: auto; padding: 24px; font: 17px/1.6 system-ui, sans-serif; }
+    h1,h2,h3 { line-height: 1.2; }
+    h2 { margin-top: 2.5em; }
+    nav { display: flex; flex-wrap: wrap; gap: 16px; padding: 16px 0; }
+    a { color: light-dark(#0757a8, #8bbfff); }
+    code,pre { font-family: ui-monospace, monospace; }
+    code { overflow-wrap: anywhere; }
+    pre { background: light-dark(#f2f5f8, #202733); padding: 16px; overflow-x: auto; font-size: 14px; }
+    table { width: 100%; border-collapse: collapse; font-size: 15px; }
+    th,td { border-bottom: 1px solid light-dark(#ccd3dc, #465365); text-align: left; padding: 9px; vertical-align: top; }
+    .scroll { overflow-x: auto; }
+    .note { border-left: 4px solid #c28600; padding: 10px 16px; background: light-dark(#fff8e5, #30291b); }
+    footer { margin-top: 48px; font-size: 14px; }
+    @media print { body { font-size: 12px; } nav { display: none; } pre { white-space: pre-wrap; } }
+  </style>
+</head>
+<body>
+<h1>МС-ТЮК: два способа тестирования</h1>
+<p>Рабочий протокол — <strong>Hardware API v2</strong>, бинарные запросы и ответы по 28 байтов.
+TEST — удобная текстовая консоль Arduino Sensor поверх того же обработчика SensorApi.
+Она не заменяет рабочий транспорт и не меняет его формат.</p>
+<p class="note">Контракт экспериментальный, проверен тестами и сборками, но не на стенде.
+v2 несовместим с v1: сервер, хаб, шлюзы и Arduino обновляются согласованно.
+Под «рабочим протоколом» здесь понимается текущий v2, не удалённый legacy/PID.</p>
+<nav aria-label="Разделы">
+  <a href="#test">Быстрый старт TEST</a><a href="#transport">Транспорт</a>
+  <a href="#frame">Кадр</a><a href="#commands">Команды</a>
+  <a href="#results">Ответы</a><a href="#errors">Ошибки</a>
+  <a href="#queue">Очередь</a><a href="#pins">Распиновка</a>
+</nav>
+
+<h2 id="test">1. TEST: команды обычным текстом</h2>
+<ol>
+  <li>В <a href="../../arduino-sensor/BoardConfig.h">BoardConfig.h</a> раскомментируйте <code>#define TEST</code>.
+    Откройте <code>arduino-sensor.ino</code>, выберите Arduino Uno и загрузите скетч.</li>
+  <li>Откройте Serial Monitor: <strong>9600 бод</strong>, окончание строки <strong>Newline</strong>
+    или <strong>Both NL &amp; CR</strong>. Внешний терминал: 9600, 8N1.</li>
+  <li>Отправьте <code>help</code>, затем любую команду ниже. CRC и идентификаторы вручную не вводятся.</li>
+</ol>
+<table>
+  <thead><tr><th>Ввод</th><th>Что читаем</th><th>Индексы</th></tr></thead>
+  <tbody>
+    <tr><td><code>temp 0</code></td><td>Температура BMP280, °C</td><td>0, 1, 2</td></tr>
+    <tr><td><code>pressure 1</code></td><td>Давление BMP280, Па</td><td>0, 1, 2</td></tr>
+    <tr><td><code>voc 0</code></td><td>SGP40: VOC Index, не ppm</td><td>0, 1</td></tr>
+    <tr><td><code>humidity 2</code></td><td>DHT11: влажность, % RH</td><td>0, 1, 2</td></tr>
+    <tr><td><code>dust 1</code></td><td>GP2Y1010AU0F: ADC и напряжение, не концентрация</td><td>0, 1</td></tr>
+    <tr><td><code>help</code></td><td>Справка</td><td>Без аргументов</td></tr>
+  </tbody>
+</table>
+<p>Команды в нижнем регистре, индекс десятичный, с нуля. Допустимы пробелы/табуляции.
+Пустые строки игнорируются. Отрицательный/неверный индекс, лишние аргументы и неизвестная
+команда дают ошибку, а не обращение к GPIO. Максимум 31 символ до окончания строки;
+слишком длинная строка целиком отбрасывается. Незавершённая строка сбрасывается через 5 с без ввода.</p>
+<p>Пример результата <code>dust 0</code> (иллюстрация, не измерение стенда):</p>
+<pre>RX command=0x25 idx=0 tx=1 status=0
+Dust ADC: 512; voltage: 2.502 V (not concentration)
+valid=1 fresh=1 age_ms=123
+TX HEX: A5 5A 02 02 00 01 0D 25 00 00 02 00 09 C6 03 00 7B 00 00 00 00 00 00 00 00 01 B7 D3</pre>
+<p><code>TX HEX</code> — точный бинарный ответ, как он выглядел бы в рабочем транспорте,
+включая CRC. Serial возвращает <strong>текст</strong>, не эти бинарные байты.
+В текстовом TEST фиксированы <code>tx_id=1, session_id=1</code>: это локальные read-only
+запросы, не идентификаторы очереди сервера. Запрос читает существующий кэш,
+а не запускает принудительное измерение. Чтение может сбросить fresh для следующего клиента.</p>
+<p>До первого измерения возможен <code>status=5</code>. DHT11 начинает чтение примерно через 2 с;
+у VOC Index есть прогрев алгоритма около 45 с после успешного начала измерений.
+Тайм-ауты/ошибки датчика могут увеличить ожидание. ADC не доказывает физическое подключение датчика.</p>
+<h3>Бинарный ввод в TEST также доступен</h3>
+<p>В терминале с HEX-отправкой можно послать 28 настоящих байтов, начиная с <code>A5 5A</code>.
+Пример GET_DUST idx=0, tx=1, session=1:</p>
+<pre>A5 5A 02 01 00 01 0D 25 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 89 2C</pre>
+<p>Не вводите эту HEX-строку обычным текстом в Serial Monitor. CRC проверяется автоматически.
+CR/LF внутри бинарного кадра — данные, не разделители строк. Межбайтовый тайм-аут 250 мс,
+общий — 1000 мс. Повреждённый кадр не вызывает SensorApi; начинайте следующий с нового magic.</p>
+<p class="note">Без TEST консоль отсутствует. Austere продолжает работать и при TEST, но печать
+в Serial блокирующая и замедляет опрос. TEST не предназначен для штатной работы сервера;
+Serial-запрос не отправляет ответ шлюзу. Команд управления актуаторами/концевиками в этой консоли нет.</p>
+
+<h2 id="transport">2. Рабочий транспорт</h2>
+<pre>Компьютер → центральный хаб → Arduino-шлюз → Arduino
+                SimpleBus         AustereMaster
+Ответ возвращается обратным маршрутом.</pre>
+<p>Компьютер и шлюзы используют общую USART1/SimpleBus-линию хаба.
+Адреса: компьютер <code>99 / 63</code>, хаб <code>12 / 0C</code>, sensors-шлюз
+<code>13 / 0D</code>, actuator-шлюз <code>14 / 0E</code> (десятичный / HEX).</p>
+<p>Один пакет SimpleBus: <code>CR | 2 ASCII HEX символа адреса получателя | 1 байт данных | LF</code>.
+Всего 5 байтов; HEX в верхнем регистре. Адреса отправителя в пакете нет.
+Один кадр API переносится 28 такими пакетами; 9600, 8N1, после каждого пакета минимум 2 мс.
+Компьютер адресует хаб, хаб — нужный шлюз; ответы идут шлюз → хаб → компьютер.
+Austere переносит те же 28 байтов без изменения.</p>
+
+<h2 id="frame">3. Кадр Hardware API v2</h2>
+<p>Все многобайтовые числа <strong>big-endian</strong>: старший байт первым.
+Индексы устройств начинаются с нуля.</p>
+<div class="scroll"><table>
+  <thead><tr><th>Смещение</th><th>Байт</th><th>Поле</th><th>Значение</th></tr></thead>
+  <tbody>
+    <tr><td>0</td><td>2</td><td>magic</td><td><code>A5 5A</code></td></tr>
+    <tr><td>2</td><td>1</td><td>version</td><td>2</td></tr>
+    <tr><td>3</td><td>1</td><td>kind</td><td>1 — запрос, 2 — ответ</td></tr>
+    <tr><td>4</td><td>2</td><td>tx_id</td><td>Номер запроса внутри сессии</td></tr>
+    <tr><td>6</td><td>1</td><td>node</td><td>13 — sensors, 14 — actuator</td></tr>
+    <tr><td>7</td><td>1</td><td>command</td><td>Код операции</td></tr>
+    <tr><td>8</td><td>1</td><td>status</td><td>В запросе 0; в ответе код результата</td></tr>
+    <tr><td>9</td><td>1</td><td>idx</td><td>Индекс устройства; GET_MODE — FF</td></tr>
+    <tr><td>10</td><td>8</td><td>data</td><td>Аргументы или результат; неиспользованные байты нулевые</td></tr>
+    <tr><td>18</td><td>8</td><td>session_id</td><td>Сессия, копируется в ответ</td></tr>
+    <tr><td>26</td><td>2</td><td>CRC</td><td>CRC-16/CCITT-FALSE для байтов 2–25</td></tr>
+  </tbody>
+</table></div>
+<p>CRC: polynomial <code>0x1021</code>, init <code>0xFFFF</code>, refin/refout=false,
+xorout=0. Для ASCII <code>123456789</code> результат <code>0x29B1</code>.
+CRC обнаруживает повреждение, но не аутентифицирует отправителя.</p>
+
+<h2 id="commands">4. Рабочие команды</h2>
+<p>Коды команд ниже в HEX. User доступен MCP и админке, Admin — только админке.
+Разделение прав реализовано программно выше аппаратного транспорта.</p>
+<div class="scroll"><table>
+  <thead><tr><th>API</th><th>Код</th><th>Node</th><th>idx</th><th>Аргументы data</th><th>Успешный ответ</th><th>Доступ</th></tr></thead>
+  <tbody>
+    <tr><td>get_temp</td><td>20</td><td>13</td><td>0–2</td><td>Все нули</td><td>i32 сотых °C + качество</td><td>User</td></tr>
+    <tr><td>get_voc</td><td>21</td><td>13</td><td>0–1</td><td>Все нули</td><td>u32 VOC Index 1–500 + качество</td><td>User</td></tr>
+    <tr><td>get_door_state</td><td>22</td><td>13*</td><td>0–1</td><td>Все нули</td><td>bool, data[0], остальное 0*</td><td>User</td></tr>
+    <tr><td>get_pressure</td><td>23</td><td>13</td><td>0–2</td><td>Все нули</td><td>u32 Па + качество</td><td>User</td></tr>
+    <tr><td>get_humidity</td><td>24</td><td>13</td><td>0–2</td><td>Все нули</td><td>u32 сотых % RH, 0–10000 + качество</td><td>User</td></tr>
+    <tr><td>get_dust</td><td>25</td><td>13</td><td>0–1</td><td>Все нули</td><td>u16 ADC + u16 мВ + качество</td><td>User</td></tr>
+    <tr><td>get_pwm</td><td>30</td><td>14</td><td>0–5</td><td>Все нули</td><td>data[0] = применённый PWM, остальное 0</td><td>User</td></tr>
+    <tr><td>get_rpm</td><td>31</td><td>14</td><td>0–5</td><td>Все нули</td><td>data[0..3] = u32 RPM, остальное 0</td><td>User</td></tr>
+    <tr><td>set_pwm</td><td>32</td><td>14</td><td>0–5</td><td>data[0] = PWM 0–255, остальное 0</td><td>Фактически применённый PWM в data[0]</td><td>User</td></tr>
+    <tr><td>get_mode</td><td>40</td><td>14</td><td>FF</td><td>Все нули</td><td>data[0] = mode, data[1] = idx</td><td>Admin</td></tr>
+    <tr><td>set_mode</td><td>41</td><td>14</td><td>0–5</td><td>data[0] = mode 0–2, остальное 0</td><td>data[0] = mode, data[1] = idx</td><td>Admin</td></tr>
+  </tbody>
+</table></div>
+<p>* GET_DOOR остаётся в текущем контракте sensors, но входы Arduino отключены и возвращают
+NOT_IMPLEMENTED. Два концевика перенесены на кнопочницу МС-ТЮК; её адресация и новый маршрут
+ещё не реализованы. Старое значение true означало «закрыто» при согласованной полярности.
+Замки и пылесос принадлежат восьмилампочнице; её маршрут пока не определён.
+Код <code>42</code> не поддерживается обеими Arduino (UNKNOWN_COMMAND).</p>
+<h3>Режимы отказа вентилятора</h3>
+<ul>
+  <li><strong>0:</strong> штатно. Ответ режима: <code>00 FF 00 00 00 00 00 00</code>; в API idx=null.</li>
+  <li><strong>1:</strong> случайный физический PWM выбранного вентилятора сразу и раз в 30 с,
+    даже без связи. Новые SET_PWM и повтор включения того же режима не сбрасывают таймер.</li>
+  <li><strong>2:</strong> искажаются только новые SET_PWM выбранного вентилятора.
+    Применённое значение удерживается до следующей команды.</li>
+</ul>
+<p>Активен только один сценарий на одном вентиляторе. Смена/отключение режима не восстанавливает
+старый запрошенный PWM; удерживается последний применённый. Потеря связи не выключает выходы.
+После перезапуска Arduino mode=0, PWM=0. Неиспользованные байты ответа режима нулевые.</p>
+<p>Пример: SET_PWM idx=2, запрос 100, а в режиме 2 применилось 230 (условный результат):</p>
+<pre>Запрос: A5 5A 02 01 00 01 0E 32 00 02 64 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 B6 91
+Ответ:  A5 5A 02 02 00 01 0E 32 00 02 E6 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 51 94</pre>
+
+<h2 id="results">5. Данные датчиков и качество</h2>
+<table>
+  <thead><tr><th>data</th><th>Смысл</th></tr></thead>
+  <tbody>
+    <tr><td>0–3</td><td>Число измерения. Для пыли: 0–1 = ADC 0–1023, 2–3 = мВ</td></tr>
+    <tr><td>4</td><td>flags: 1 = valid; 3 = valid + fresh. Других успешных значений нет</td></tr>
+    <tr><td>5–6</td><td>u16 age_ms: возраст измерения, насыщается на 65534</td></tr>
+    <tr><td>7</td><td>0</td></tr>
+  </tbody>
+</table>
+<p>Fresh означает «новое, ещё не выданное», а не «возраст равен нулю».
+После ошибки сохранённое измерение остаётся valid, теряет fresh, возраст растёт.
+До первого валидного измерения — SENSOR_UNAVAILABLE, не успешный ноль.</p>
+<pre>25.08 °C:       00 00 09 CC 03 00 00 00
+100653 Па:      00 01 89 2D 03 00 00 00
+VOC Index 100:  00 00 00 64 03 00 00 00
+55.5 % RH:      00 00 15 AE 03 00 00 00
+ADC 512, 2.502 V, age 123 мс: 02 00 09 C6 03 00 7B 00</pre>
+<p>VOC Index — не raw и не концентрация в ppm. Пыль не переводится в концентрацию;
+напряжение рассчитывается с API_DUST_REFERENCE_MV (по умолчанию 5000),
+а не измеряется независимо. Возраст аппаратного измерения отличается от времени,
+прошедшего после получения ответа компьютером.</p>
+
+<h2 id="errors">6. Ошибки и проверка ответа</h2>
+<table>
+  <thead><tr><th>Код, decimal</th><th>Имя</th><th>Значение</th></tr></thead>
+  <tbody>
+    <tr><td>0</td><td>OK</td><td>Успех</td></tr>
+    <tr><td>1</td><td>INVALID_INDEX</td><td>Неверный индекс</td></tr>
+    <tr><td>2</td><td>INVALID_ARGUMENT</td><td>Неверные аргументы/резервные байты</td></tr>
+    <tr><td>3</td><td>UNKNOWN_COMMAND</td><td>Неизвестная команда</td></tr>
+    <tr><td>4</td><td>NOT_IMPLEMENTED</td><td>Канал/функция не настроены</td></tr>
+    <tr><td>5</td><td>SENSOR_UNAVAILABLE</td><td>Нет валидного измерения</td></tr>
+    <tr><td>6</td><td>BUSY</td><td>Узел занят</td></tr>
+    <tr><td>7</td><td>DEVICE_TIMEOUT</td><td>Нет ответа нижнего узла</td></tr>
+    <tr><td>8</td><td>UNSUPPORTED_VERSION</td><td>Версия не поддерживается</td></tr>
+    <tr><td>9</td><td>INTERNAL_ERROR</td><td>Внутренняя ошибка</td></tr>
+    <tr><td>10</td><td>REQUEST_ID_CONFLICT</td><td>Конфликт идентификатора</td></tr>
+    <tr><td>11</td><td>INVALID_NODE</td><td>Неверный целевой узел</td></tr>
+    <tr><td>12</td><td>TRANSPORT_OVERFLOW</td><td>Переполнение транспорта</td></tr>
+  </tbody>
+</table>
+<p>При аппаратной ошибке все data-байты нулевые. Повреждённый CRC/частичный рабочий кадр
+не применяется. Сервер принимает ответ только для активного запроса: version=2, kind=2,
+совпадают session_id, tx_id, node, command, idx; данные/качество/резервные поля валидны.</p>
+<p>Отдельные ошибки сервера: отказ в постановке, QUEUE_TIMEOUT, HOST_TIMEOUT, DISCONNECTED.
+Если управляющая команда отправлена, но ответ потерян, исход <code>unknown</code>:
+оборудование могло выполнить её. Если отправка не началась — <code>not_sent</code>.
+Автоматического повтора управляющих команд нет.</p>
+
+<h2 id="queue">7. Очередь и длительная работа</h2>
+<p>Один serial-worker, общая FIFO для MCP/админки/фонового опроса: максимум 64 ожидающих
+и один активный запрос. Ответ клиенту — после реального результата или окончательной ошибки,
+не сразу после постановки. Фоновый опрос уступает пользовательским запросам.</p>
+<p>Очередь: до 30 с; обмен сервера: до 5 с; хаб: до 3 с; шлюз: до 1.5 с.
+Парсеры рабочего кадра: межбайтовый тайм-аут 250 мс, общий 1000 мс.
+После открытия/ошибки транспорта сервер дренирует старые байты и ждёт 1 с тишины;
+при шуме общий предел 3 с, затем отключение. Хаб: quiet 250 мс, максимум recovery 1000 мс.</p>
+<p><code>tx_id</code> 1–65535 используется внутри сессии. При исчерпании сервер увеличивает
+session_id и снова начинает с 1: срока жизни «65535 запросов» нет.
+При старте session_id случайная ненулевая u64. Ответ старой сессии игнорируется.
+Это корреляция, не аутентификация и не гарантия exactly-once при сбое питания.</p>
+<p><code>decision_id</code> клиента отдельно от аппаратной пары. Одинаковый ID и аргументы
+получают тот же результат без нового воздействия. Завершённые решения хранятся в SQLite,
+до 4096 также в RAM-кэше. Незавершённый ID после перезапуска не исполняется повторно:
+сначала проверяем оборудование. Файл БД следует сохранять; следить за свободным местом.
+Для MCP SET_PWM decision_id обязателен. Административные get_mode/set_mode в MCP не публикуются.</p>
+
+<h2 id="pins">8. Согласованная карта Arduino Sensor (Uno)</h2>
+<table>
+  <thead><tr><th>Устройство</th><th>GPIO</th></tr></thead>
+  <tbody>
+    <tr><td>Austere: MISO/MOSI/CLK/CS/IRQ</td><td>A2 / A3 / A4 / A5 / D13</td></tr>
+    <tr><td>BMP280 ×3</td><td>SCL общий D2; SDA D3/D4/D5</td></tr>
+    <tr><td>SGP40 ×2</td><td>SCL общий D6; SDA D7/D12</td></tr>
+    <tr><td>DHT11 ×3</td><td>D8/D9/D10</td></tr>
+    <tr><td>GP2Y1010AU0F ×2</td><td>LED общий D11; ADC A0/A1</td></tr>
+    <tr><td>Serial</td><td>D0/D1, не заняты датчиками</td></tr>
+    <tr><td>Концевики ×2</td><td>Кнопочница МС-ТЮК; на Arduino отключены</td></tr>
+  </tbody>
+</table>
+<p>Аппаратные операции последовательные. A2–A5 здесь цифровые GPIO Austere,
+не аппаратный I²C. Соединения со шлюзом должны соответствовать карте.
+Нужно проверить питание/подтяжки/уровни и запас стека на стенде: сборка не означает
+проверенную электрическую совместимость. TEST не выделяет heap.</p>
+<footer>
+  <p>Исходные контракты:
+    <a href="HARDWARE-PROTOCOL.md">Markdown</a> ·
+    <a href="protocol/hardware-v2.json">JSON v2</a> ·
+    <a href="protocol/hardware-v2-vectors.json">44 эталонных обмена</a> ·
+    <a href="../../arduino-sensor/README.md">README Arduino Sensor</a>.
+    Обновлено 2026-10-09. Документ самодостаточный, без внешних скриптов и библиотек.</p>
+</footer>
+</body>
+</html>

@@ -52,6 +52,8 @@ def main():
         for index, source in enumerate(sources):
             binary = str(Path(directory) / f"suite-{index}")
             extra = []
+            if source.name == "diagnostics_test.cpp":
+                extra = ["-I" + str(source.parent / "mock")]
             if source.name == "softwarewire_test.cpp":
                 extra = ["-I" + str(source.parent / "mock"),
                          str(source.parents[1] / "src/softwarewire/SoftwareWire.cpp")]

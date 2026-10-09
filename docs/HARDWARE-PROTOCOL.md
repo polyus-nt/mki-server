@@ -6,6 +6,7 @@ Arduino-шлюзов, центрального хаба и Rust-приложен
 29-байтовой телеметрией, PID/config-командами и старым GraphML.
 
 Связанные документы: [архитектура](HARDWARE-API-ARCHITECTURE.md),
+[HTML: рабочий протокол и текстовая TEST-консоль](HARDWARE-PROTOCOL.html),
 [реализация](FIRMWARE-IMPLEMENTATION.md),
 [JSON-контракт](protocol/hardware-v2.json),
 [44 эталонных обмена](protocol/hardware-v2-vectors.json).
