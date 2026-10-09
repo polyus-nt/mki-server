@@ -231,16 +231,16 @@ session_id и снова начинает с 1: срока жизни «65535 з
 <table>
   <thead><tr><th>Устройство</th><th>GPIO</th></tr></thead>
   <tbody>
-    <tr><td>Austere: MISO/MOSI/CLK/CS/IRQ</td><td>A2 / A3 / A4 / A5 / D13</td></tr>
+    <tr><td>Austere: MISO/MOSI/CLK/CS/IRQ</td><td>D9 / D10 / D11 / D12 / D13</td></tr>
     <tr><td>BMP280 ×3</td><td>SCL общий D2; SDA D3/D4/D5</td></tr>
-    <tr><td>SGP40 ×2</td><td>SCL общий D6; SDA D7/D12</td></tr>
-    <tr><td>DHT11 ×3</td><td>D8/D9/D10</td></tr>
-    <tr><td>GP2Y1010AU0F ×2</td><td>LED общий D11; ADC A0/A1</td></tr>
+    <tr><td>SGP40 ×2</td><td>SCL общий D6; SDA D7/D8</td></tr>
+    <tr><td>DHT11 ×3</td><td>A2/A3/A4</td></tr>
+    <tr><td>GP2Y1010AU0F ×2</td><td>LED общий A5; ADC A0/A1</td></tr>
     <tr><td>Serial</td><td>D0/D1, не заняты датчиками</td></tr>
     <tr><td>Концевики ×2</td><td>Кнопочница МС-ТЮК; на Arduino отключены</td></tr>
   </tbody>
 </table>
-<p>Аппаратные операции последовательные. A2–A5 здесь цифровые GPIO Austere,
+<p>Аппаратные операции последовательные. A2–A5 здесь цифровые GPIO датчиков,
 не аппаратный I²C. Соединения со шлюзом должны соответствовать карте.
 Нужно проверить питание/подтяжки/уровни и запас стека на стенде: сборка не означает
 проверенную электрическую совместимость. TEST не выделяет heap.</p>
