@@ -1,76 +1,151 @@
-# TJC Commutator — аппаратный API МС-ТЮК
+# МС-ТЮК Hub API — FastAPI
 
-Rust-приложение использует Hardware API v2: фиксированные CRC-кадры через
-центральный хаб и Arduino-шлюзы. Старые PID/config-команды и 29-байтовая
-телеметрия больше не отправляются. Работа требует совместимых feature-прошивок;
-физический стенд пока не проверен.
+Самостоятельный Python-сервис для **фаблаб-теплицы**: HTTP → FIFO → COM-порт →
+центральный хаб МС-ТЮК → аппаратный узел. Ветка `feat/fastapi-hub-service`
+содержит только сервис, тесты и документацию. Предыдущий Rust-проект и прошивки
+сохранены в истории и ветке `feat/hardware-api-firmware`, но не нужны для запуска сервиса.
 
-- [Архитектура](docs/HARDWARE-API-ARCHITECTURE.md)
-- [Конфигурации фаблаб-теплицы и теплицы-химреактора](docs/GREENHOUSE-CONFIGURATIONS.md)
-- [Человекочитаемый протокол](docs/HARDWARE-PROTOCOL.md)
-- [Статус прошивок и ограничения](docs/FIRMWARE-IMPLEMENTATION.md)
-- [JSON и golden-векторы](docs/protocol/hardware-v2.json)
+Сейчас HTTP API **только читает**. Методов установки PWM, блокировки замков,
+включения пылесоса, изменения fault-mode и сырых пакетов нет.
+Управляющие команды замков/пылесоса реализованы в прошивке lmp8, но не экспортированы
+этим сервисом. Релейный вентилятор относится к химреактору и отключён.
 
-## Работа
+## Запуск на Windows
 
-Один отдельный worker владеет COM-портом. Общая ограниченная FIFO обслуживает
-GUI, MCP и фоновый опрос. Одновременно выполняется один запрос; ответ приходит
-после оборудования или ошибки. Управляющие команды автоматически не повторяются.
+Python 3.10+; в каталоге репозитория:
 
-GUI показывает три BMP280 (температуру/давление), два SGP40 (VOC Index),
-три DHT11 (влажность), две двери, PWM/RPM шести вентиляторов и графики
-температур/RPM. Сохранённые значения явно показывают возраст кэша и качество
-датчика; физическое расположение каналов inside/outside не выдумывается.
-В админке доступны PWM и режимы неисправностей. Пыль возвращает ADC и напряжение без концентрации; замки и пылесос
-ещё не подключены к серверным tools.
-
-MCP: `http://127.0.0.1:8765/mcp`, bearer token из `TJC_MCP_TOKEN` либо
-сгенерированный при старте (показывается по запросу в GUI).
-Tools: get_temperature, get_voc, get_door_state, get_pressure, get_humidity,
-get_fan_pwm, get_fan_rpm, get_dust, set_fan_pwm; дополнительно кэш, история, события и
-уведомления оператору. Ни get_mode/set_mode, ни старых PID tools нет.
-MCP получает только UserApi. По умолчанию он только читает;
-`TJC_AGENT_PHASE=full` разрешает PWM с обязательным decision_id.
-
-## Сборка и проверки
-
-Нужны Rust edition 2024, C/C++ linker, pkg-config/libudev на Linux
-и графическое окружение для запуска GUI.
-
-```sh
-cargo run --bin tjc-commutator-v0-1-1
-cargo fmt --check
-cargo test
-cargo check
-python3 scripts/validate_hardware_protocol.py
-python3 scripts/test_firmware.py --sanitize
+```powershell
+git fetch origin
+git switch feat/fastapi-hub-service
+git pull
+py -3 -m venv .venv
+.venv\Scripts\python.exe -m pip install -r requirements.txt
+.venv\Scripts\python.exe -m hub_service --serial-port COM15
 ```
 
-В Nix-окружении без dev-shell (команда не прошивает платы):
+Откройте Swagger: **http://127.0.0.1:8000/docs**.
+COM15 — рабочий порт текущего стенда; при другом назначении укажите свой.
+Закройте sensor_console, hub_test_console, commutator и другие программы,
+владеющие этим портом. Нужны **рабочие** прошивки API v2, не тестовый byte-response хаб.
 
-```sh
-tjc_udev_dev=$(nix --extra-experimental-features 'nix-command flakes' eval --raw nixpkgs#systemd.dev.outPath)
-nix --extra-experimental-features 'nix-command flakes' shell nixpkgs#cargo nixpkgs#rustc nixpkgs#rustfmt nixpkgs#gcc nixpkgs#pkg-config nixpkgs#systemd.dev --command env PKG_CONFIG_PATH="$tjc_udev_dev/lib/pkgconfig" cargo test
+Пример PowerShell:
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:8000/api/v1/hub/probe
+Invoke-RestMethod http://127.0.0.1:8000/api/v1/pressure/0
+Invoke-RestMethod http://127.0.0.1:8000/api/v1/doors/0/state
+Invoke-RestMethod http://127.0.0.1:8000/api/v1/locks/1/state
+Invoke-RestMethod http://127.0.0.1:8000/api/v1/vacuum/state
 ```
 
-SQLite сохраняет telemetry/events/tool_calls и старые таблицы/записи без
-удаления. История новых температур адресуется idx=0..2 и не подменяет старые
-inside/outside данными неизвестного размещения.
+`hub/probe` ожидает INVALID_INDEX от самого хаба: нижние узлы не участвуют.
+Он подтверждает обмен с хабом, но не наличие датчиков или состояние исполнительных устройств.
+`/health` проверяет состояние сервиса/порта, не запускает аппаратный опрос.
 
-## Ограничения перед запуском стенда
+## Эндпоинты
 
-Согласовать распиновку, полудуплекс общей линии и совместимые прошивки.
-Порт 9600 8N1; хаб 12, компьютер 99, шлюзы 13/14.
-История в памяти ограничена 1000 точками на канал; FIFO — 64 запроса,
-кэш завершённых решений — 4096, одно решение — не более 64 ожидателей.
-Очередь ждёт до 30 с, физический обмен до 5 с.
+Все аппаратные операции — GET, префикс `/api/v1`.
 
-В v2 нет накопительного лимита запросов: tx_id циклический, сессия меняется
-автоматически. Старые ответы проверяются по session_id и tx_id.
-История решений хранится в SQLite, кэш 4096 не ограничивает общее число решений.
-После прерывания незавершённого решения повтор не исполняется автоматически.
-Файл SQLite нужно сохранять; размер истории на диске растёт, следите за свободным
-местом. Для v2 нужно обновить сервер, хаб, оба шлюза и обе Arduino одновременно.
+| Путь | Индекс | Результат |
+| --- | --- | --- |
+| `/temperature/{idx}` | 0..2 | температура BMP280, °C |
+| `/pressure/{idx}` | 0..2 | давление BMP280, Па |
+| `/voc/{idx}` | 0..1 | VOC Index SGP40, не ppm |
+| `/humidity/{idx}` | 0..2 | влажность DHT11, % RH |
+| `/dust/{idx}` | 0..1 | ADC и напряжение GP2Y1010AU0F, не концентрация |
+| `/doors/{idx}/state` | 0..1 | `closed`, концевики кнопочницы |
+| `/fans/{idx}/pwm` | 0..5 | применённый PWM 0..255 на Arduino |
+| `/fans/{idx}/rpm` | 0..5 | измеренные RPM на Arduino |
+| `/locks/{idx}/state` | 0..1 | состояние независимого выхода замка на lmp8 |
+| `/vacuum/state` | без индекса | состояние выхода пылесоса на lmp8 |
+| `/hub/probe` | без индекса | ответ самого хаба |
+| `/capabilities` | без индекса | состав поддерживаемой фаблаб-конфигурации |
 
-Python-файлы в корне — прежняя диагностика; они несовместимы с новым API,
-не являются вторым production GUI и не должны отправлять команды на новый стенд.
+Замки теперь **на разных пинах**, поэтому имеют индексы 0/1. Пылесос один,
+его публичный API индекса не содержит. `lock_output_enabled` — состояние выхода
+управления, **не подтверждение физического срабатывания**. `closed` читается
+отдельно с концевика. `enabled` пылесоса также не доказывает вращение двигателя.
+
+Пример ответа давления (иллюстрация, не измерение стенда):
+
+```json
+{"idx":0,"value":100653,"unit":"Pa","valid":true,"fresh":true,"age_ms":123,"received_at":"2026-10-10T00:00:00Z"}
+```
+
+`age_ms` — возраст показания на плате, `fresh` — ещё не выданное новое измерение.
+Повторный GET может вернуть прежнее значение с `fresh=false`. `received_at` —
+время получения ответа компьютером. HTTP-слой не подставляет фиктивные измерения.
+
+## Очередь и ошибки
+
+Один worker сериализует физические обмены; все операции с портом, включая
+открытие/закрытие, выполняет один выделенный поток. Async HTTP не блокируется
+на UART: `/health` доступен и во время ожидания оборудования.
+По умолчанию: 64 ожидающих запроса + один активный, ожидание в очереди 30 с,
+аппаратный обмен 5 с. Ответ возвращается после оборудования или ошибки,
+а не сразу с `queued`. Каждый GET делает отдельное чтение; фонового опроса,
+БД и общего snapshot всех каналов нет.
+
+Ошибки оборудования возвращаются JSON, например HTTP 504:
+
+```json
+{"error":{"code":"DEVICE_TIMEOUT","message":"Оборудование вернуло ошибку","device_status":7,"node":13,"command":"get_pressure","idx":0}}
+```
+
+- Неверный HTTP индекс/тип — 422, запрос не отправляется в порт.
+- `SENSOR_UNAVAILABLE`, `BUSY`, `QUEUE_FULL` — 503.
+- `DEVICE_TIMEOUT`, `HOST_TIMEOUT`, `QUEUE_TIMEOUT` — 504.
+- `NOT_IMPLEMENTED`/`UNKNOWN_COMMAND` — 501; прочие аппаратные ошибки — 502.
+- `DISCONNECTED` — 503; после обрыва порта сервис нужно перезапустить.
+
+Просроченный/отменённый запрос в очереди не передаётся. Отмена HTTP-ожидания
+не прерывает уже начатый физический обмен: следующий запрос ждёт его окончания.
+Повторов нет. После host timeout/транспортных ошибок worker дренирует поздние
+байты и ждёт секунду тишины (не дольше 3 с); при непрерывном шуме отключается.
+
+## Настройка и безопасность
+
+```powershell
+.venv\Scripts\python.exe -m hub_service --serial-port COM15 --http-port 8000 --debug
+```
+
+Дополнительные параметры: `--queue-capacity`, `--queue-timeout`, `--exchange-timeout`.
+`--debug` печатает TX API и все RX RAW до разбора.
+Вместо `--serial-port` можно задать `MSTJUK_SERIAL_PORT`.
+
+По умолчанию слушает только localhost. Для доступа по сети CLI требует Bearer token:
+
+```powershell
+$env:MSTJUK_API_TOKEN = "замените-на-длинный-случайный-токен"
+.venv\Scripts\python.exe -m hub_service --serial-port COM15 --host 0.0.0.0
+```
+
+Для токена используйте ASCII: он передаётся в HTTP-заголовке.
+Заголовок клиента: `Authorization: Bearer <token>`; Swagger поддерживает Authorize.
+Токен защищает GET-операции и health, но не превращает сервис в Admin API.
+Для недоверенной сети нужны HTTPS/reverse proxy и отдельная настройка доступа.
+Никогда не запускайте несколько workers/экземпляров на одном COM-порту.
+При запуске напрямую через uvicorn ответственность за bind/token остаётся у оператора:
+`MSTJUK_SERIAL_PORT` должен быть задан, `--workers 1`, без reload для рабочего стенда.
+
+На Linux/macOS: `python3 -m venv .venv`, затем `.venv/bin/python -m pip install -r requirements.txt`
+и `.venv/bin/python -m hub_service --serial-port /dev/ttyUSB0`.
+
+## Проверки
+
+```powershell
+.venv\Scripts\python.exe -m pip install -r requirements-test.txt
+.venv\Scripts\python.exe -m unittest discover -s tests -v
+```
+
+Тесты проверяют HTTP, единицы измерения, read-only набор маршрутов, индексы,
+ошибки, токен, FIFO, переполнение/отмену/тайм-аут, shutdown/disconnect, восстановление,
+CRC/resync/session wrap и 44 ранее согласованных wire-вектора. В POSIX дополнительно
+проверяется полный HTTP → pyserial → виртуальный PTY-хаб → HTTP. Старые векторы дверей
+с node13 сохранены для проверки байтового формата, а **новый маршрут node15** проверен
+отдельными тестами. Windows COM-драйвер и реальное железо эти тесты не заменяют.
+
+[Аппаратный протокол](docs/PROTOCOL.md) · [Конфигурации](docs/GREENHOUSES.md)
+
+Lifespan соответствует [рекомендованному механизму FastAPI](https://fastapi.tiangolo.com/advanced/events/);
+serial I/O использует [pySerial API](https://pyserial.readthedocs.io/en/latest/pyserial_api.html).

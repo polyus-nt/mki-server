@@ -2261,7 +2261,7 @@
       "api_result": {
         "ok": true,
         "adc": 1023,
-        "voltage": 5.0,
+        "voltage": 5,
         "unit": "V",
         "valid": true,
         "fresh": false,
