@@ -24,6 +24,7 @@ DATA = {
     0x31: (70000).to_bytes(4, "big") + bytes(4),
     0x43: b"\x00" + bytes(7),
     0x52: b"\x00" + bytes(7),
+    0x40: b"\x00\xff" + bytes(6),
 }
 
 
@@ -40,20 +41,44 @@ class FakeTransport:
     def close(self):
         self.closed = True
 
-    def exchange(self, command, idx):
+    def exchange(self, command, idx, data=bytes(8)):
         self.calls.append((command.node, command.code, idx))
+        self.last_data = data
         if not self.gate.wait(2):
             raise OSError("test gate")
         if self.error:
             error, self.error = self.error, None
             raise error
         probe = command.layout == "probe"
+        if command.code == 0x32:
+            payload = data
+        elif command.code == 0x41:
+            payload = bytes([data[0], idx if data[0] else 255]) + bytes(6)
+        elif command.code in (0x42, 0x53):
+            payload = bytes(8)
+        else:
+            payload = bytes(8) if probe else DATA[command.code]
         frame = Frame(1, command.node, command.code, idx, 1,
-                      bytes(8) if probe else DATA[command.code], kind=2, status=1 if probe else 0)
+                      payload, kind=2, status=1 if probe else 0)
         return decode_result(command, frame)
 
 
 class ApiTests(unittest.TestCase):
+    def test_six_fans_keep_global_indices_and_virtual_node(self):
+        app = create_app(Settings("test"), FakeTransport)
+        with TestClient(app) as client:
+            for idx in range(6):
+                for command, code in (("pwm", 0x30), ("rpm", 0x31)):
+                    response = client.get(f"/api/v1/fans/{idx}/{command}")
+                    self.assertEqual(response.status_code, 200, response.text)
+                    self.assertEqual(response.json()["idx"], idx)
+                    self.assertEqual(app.state.service.transport.calls[-1], (14, code, idx))
+            routes = client.get("/api/v1/capabilities").json()["actuator_routes"]
+            self.assertEqual(routes, [
+                {"gateway_node": 14, "global_indices": [0, 1, 2, 3], "local_indices": [0, 1, 2, 3]},
+                {"gateway_node": 17, "global_indices": [4, 5], "local_indices": [0, 1]},
+            ])
+
     def test_read_endpoints_and_units(self):
         app = create_app(Settings("test"), FakeTransport)
         expected = (("temperature/0", "value", -12.34), ("pressure/0", "value", 100653),
@@ -80,18 +105,68 @@ class ApiTests(unittest.TestCase):
             self.assertEqual(client.get("/docs").status_code, 200)
         self.assertTrue(app.state.service.transport.closed)
 
-    def test_invalid_indices_never_reach_port_and_no_write_methods(self):
+    def test_invalid_indices_never_reach_port_and_only_declared_write_methods(self):
         app = create_app(Settings("test"), FakeTransport)
         with TestClient(app) as client:
             for path in ("temperature/-1", "pressure/3", "humidity/3", "voc/2", "dust/2",
                          "doors/2/state", "locks/2/state", "fans/6/pwm", "fans/0.1/rpm", "pressure/x"):
                 self.assertEqual(client.get("/api/v1/" + path).status_code, 422, path)
             self.assertEqual(app.state.service.transport.calls, [])
-            self.assertEqual(client.post("/api/v1/fans/0/pwm", json={"pwm": 100}).status_code, 405)
+            self.assertEqual(client.post("/api/v1/fans/6/pwm", json={"pwm": 100}).status_code, 422)
             self.assertEqual(client.post("/api/v1/mode", json={"mode": 1}).status_code, 404)
             self.assertEqual(client.get("/api/v1/relay-fan/level").status_code, 404)
-            for path, operations in client.get("/openapi.json").json()["paths"].items():
-                self.assertEqual(set(operations), {"get"}, path)
+            writes = {path for path, operations in client.get("/openapi.json").json()["paths"].items() if "post" in operations}
+            self.assertEqual(writes, {"/api/v1/fans/{idx}/pwm", "/api/v1/admin/mode",
+                                      "/api/v1/admin/locks/{idx}", "/api/v1/admin/vacuum"})
+
+    def test_controls_admin_separation_and_strict_bodies(self):
+        app = create_app(Settings("test", api_token="user", admin_token="admin"), FakeTransport)
+        user = {"Authorization": "Bearer user"}
+        admin = {"Authorization": "Bearer admin"}
+        with TestClient(app) as client:
+            port = app.state.service.transport
+            result = client.post("/api/v1/fans/5/pwm", json={"pwm": 123}, headers=user)
+            self.assertEqual(result.status_code, 200, result.text)
+            self.assertEqual(result.json()["idx"], 5)
+            self.assertEqual(result.json()["value"], 123)
+            self.assertEqual(port.calls[-1], (14, 0x32, 5))
+            self.assertEqual(port.last_data, b"\x7b" + bytes(7))
+            before = len(port.calls)
+            for path, body in (("mode", {"mode": 1, "idx": 4}), ("locks/0", {"lock_state": True}),
+                               ("vacuum", {"mode": 1})):
+                self.assertEqual(client.post("/api/v1/admin/" + path, json=body, headers=user).status_code, 403)
+            self.assertEqual(client.get("/api/v1/admin/mode", headers=user).status_code, 403)
+            self.assertEqual(len(port.calls), before)
+            self.assertEqual(client.get("/api/v1/admin/mode", headers=admin).json()["idx"], None)
+            result = client.post("/api/v1/admin/mode", json={"mode": 1, "idx": 4}, headers=admin)
+            self.assertEqual(result.status_code, 200, result.text)
+            self.assertEqual(result.json()["idx"], 4)
+            self.assertEqual(port.calls[-1], (14, 0x41, 4))
+            self.assertEqual(port.last_data, b"\x01" + bytes(7))
+            for path, body, code, idx in (("locks/1", {"lock_state": True}, 0x42, 1),
+                                          ("vacuum", {"mode": 1}, 0x53, 0)):
+                result = client.post("/api/v1/admin/" + path, json=body, headers=admin)
+                self.assertEqual(result.status_code, 200, result.text)
+                self.assertTrue(result.json()["acknowledged"])
+                self.assertEqual(port.calls[-1], (16, code, idx))
+                self.assertEqual(port.last_data, b"\x01" + bytes(7))
+            before = len(port.calls)
+            for body in ({"pwm": -1}, {"pwm": 256}, {"pwm": True}, {"pwm": "100"}, {"pwm": 100, "extra": 1}):
+                self.assertEqual(client.post("/api/v1/fans/0/pwm", json=body, headers=user).status_code, 422)
+            for path, body in (("mode", {"mode": 3, "idx": 0}), ("mode", {"mode": 1, "idx": 6}),
+                               ("vacuum", {"mode": True}), ("vacuum", {"mode": 2}),
+                               ("locks/0", {"lock_state": 1})):
+                self.assertEqual(client.post("/api/v1/admin/" + path, json=body, headers=admin).status_code, 422)
+            self.assertEqual(len(port.calls), before)
+
+    def test_admin_disabled_without_separate_token(self):
+        app = create_app(Settings("test"), FakeTransport)
+        with TestClient(app) as client:
+            self.assertEqual(client.get("/api/v1/admin/mode").status_code, 503)
+            self.assertEqual(client.post("/api/v1/admin/vacuum", json={"mode": 1}).status_code, 503)
+            self.assertEqual(app.state.service.transport.calls, [])
+        with self.assertRaises(ValueError):
+            Settings("test", api_token="same", admin_token="same")
 
     def test_device_error_is_structured_http_504(self):
         app = create_app(Settings("test"), FakeTransport)

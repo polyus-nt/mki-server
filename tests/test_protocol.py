@@ -5,7 +5,7 @@ from pathlib import Path
 import unittest
 
 from hub_service.errors import DeviceError
-from hub_service.protocol import COMMANDS, PROBE, Frame, ReplyParser, decode_result, envelope
+from hub_service.protocol import COMMANDS, PROBE, WRITE_COMMANDS, Frame, ReplyParser, decode_result, envelope
 
 
 def reply(command, data=bytes(8), status=0, idx=0):
@@ -13,6 +13,21 @@ def reply(command, data=bytes(8), status=0, idx=0):
 
 
 class ProtocolTests(unittest.TestCase):
+    def test_global_mode_and_control_acknowledgements(self):
+        for mode, idx in ((0, 255), (1, 4), (2, 5)):
+            for command in (COMMANDS["mode"], WRITE_COMMANDS["mode"]):
+                result = decode_result(command, reply(command, bytes([mode, idx]) + bytes(6)))
+                self.assertEqual(result, {"mode": mode, "idx": None if mode == 0 else idx})
+        for data in (bytes([0, 0]) + bytes(6), bytes([1, 255]) + bytes(6),
+                     bytes([2, 6]) + bytes(6), bytes([3, 0]) + bytes(6),
+                     bytes([0, 255]) + bytes(5) + b"\x01"):
+            with self.assertRaises(ValueError):
+                decode_result(COMMANDS["mode"], reply(COMMANDS["mode"], data))
+        for name in ("vacuum", "lock"):
+            self.assertEqual(decode_result(WRITE_COMMANDS[name], reply(WRITE_COMMANDS[name])), {"acknowledged": True})
+            with self.assertRaises(ValueError):
+                decode_result(WRITE_COMMANDS[name], reply(WRITE_COMMANDS[name], b"\x01" + bytes(7)))
+
     def test_44_existing_golden_vectors(self):
         fixtures = json.loads((Path(__file__).parent / "fixtures/hardware-v2-vectors.json").read_text(encoding="utf-8"))
         self.assertEqual(binascii.crc_hqx(b"123456789", 0xffff), 0x29b1)

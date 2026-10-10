@@ -110,6 +110,27 @@ class TransportTests(unittest.TestCase):
                         elif request.command == 0x22:
                             self.assertEqual(request.node, 15)
                             response = replace(request, kind=2, data=b"\x01" + bytes(7))
+                        elif request.command in (0x30, 0x31, 0x32, 0x40, 0x41):
+                            self.assertEqual(request.node, 14)  # node17 не виден компьютеру.
+                            if request.command == 0x40:
+                                self.assertEqual(request.idx, 255)
+                                data = b"\x00\xff" + bytes(6)
+                            elif request.command == 0x41:
+                                self.assertEqual(request.data, b"\x02" + bytes(7))
+                                data = bytes([request.data[0], request.idx]) + bytes(6)
+                            elif request.command == 0x31:
+                                data = (1200 + request.idx).to_bytes(4, "big") + bytes(4)
+                            elif request.command == 0x32:
+                                self.assertEqual(request.idx, 5)
+                                self.assertEqual(request.data, b"\x64" + bytes(7))
+                                data = request.data
+                            else:
+                                data = bytes([100 + request.idx]) + bytes(7)
+                            response = replace(request, kind=2, data=data)
+                        elif request.command in (0x42, 0x53):
+                            self.assertEqual(request.node, 16)
+                            self.assertEqual(request.data, b"\x01" + bytes(7))
+                            response = replace(request, kind=2, data=bytes(8))
                         else:
                             response = replace(request, kind=2, data=(100653).to_bytes(4, "big") + bytes.fromhex("03 00 00 00"))
                         wire = b"".join(envelope(b, 99) for b in response.encode())
@@ -120,15 +141,33 @@ class TransportTests(unittest.TestCase):
 
         thread = threading.Thread(target=hardware, daemon=True); thread.start()
         try:
-            with TestClient(create_app(Settings(os.ttyname(slave)))) as client:
+            with TestClient(create_app(Settings(os.ttyname(slave), admin_token="admin"))) as client:
                 self.assertTrue(client.get("/api/v1/hub/probe").json()["responding"])
                 response = client.get("/api/v1/pressure/0")
                 self.assertEqual(response.status_code, 200, response.text)
                 self.assertEqual(response.json()["value"], 100653)
                 self.assertTrue(client.get("/api/v1/doors/1/state").json()["closed"])
-            self.assertEqual(len(requests), 3)
+                for idx in range(6):
+                    for command, value in (("pwm", 100 + idx), ("rpm", 1200 + idx)):
+                        result = client.get(f"/api/v1/fans/{idx}/{command}")
+                        self.assertEqual(result.status_code, 200, result.text)
+                        self.assertEqual(result.json()["idx"], idx)
+                        self.assertEqual(result.json()["value"], value)
+                result = client.post("/api/v1/fans/5/pwm", json={"pwm": 100})
+                self.assertEqual(result.status_code, 200, result.text)
+                self.assertEqual(result.json()["value"], 100)
+                headers = {"Authorization": "Bearer admin"}
+                self.assertIsNone(client.get("/api/v1/admin/mode", headers=headers).json()["idx"])
+                result = client.post("/api/v1/admin/mode", json={"mode": 2, "idx": 4}, headers=headers)
+                self.assertEqual(result.status_code, 200, result.text)
+                self.assertEqual(result.json()["idx"], 4)
+                for path, body in (("vacuum", {"mode": 1}), ("locks/1", {"lock_state": True})):
+                    result = client.post("/api/v1/admin/" + path, json=body, headers=headers)
+                    self.assertEqual(result.status_code, 200, result.text)
+                    self.assertTrue(result.json()["acknowledged"])
+            self.assertEqual(len(requests), 20)
             self.assertEqual(len({r.session_id for r in requests}), 1)
-            self.assertEqual([r.tx_id for r in requests], [1, 2, 3])
+            self.assertEqual([r.tx_id for r in requests], list(range(1, 21)))
         finally:
             stop.set(); thread.join(1); os.close(master); os.close(slave)
         self.assertFalse(errors, errors)

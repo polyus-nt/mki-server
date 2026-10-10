@@ -24,9 +24,19 @@ class ConsoleTests(unittest.TestCase):
         self.requests = []
         self.failed_path = None
         self.redirect = False
+        self.posts = []
         owner = self
 
         class Handler(BaseHTTPRequestHandler):
+            def do_POST(self):
+                payload = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+                owner.posts.append((self.path, self.headers.get("Authorization"), payload))
+                raw = b'{"acknowledged":true}'
+                self.send_response(200)
+                self.send_header("Content-Length", str(len(raw)))
+                self.end_headers()
+                self.wfile.write(raw)
+
             def do_GET(self):
                 owner.requests.append((self.path, self.headers.get("Authorization")))
                 if owner.redirect:
@@ -75,7 +85,7 @@ class ConsoleTests(unittest.TestCase):
 
     def test_selftest_covers_every_get_and_every_index(self):
         paths = console.selftest_paths(self.schema)
-        self.assertEqual(len(paths), 33)
+        self.assertEqual(len(paths), 34)
         expected = []
         for path, count in console.COMMANDS.values():
             expected.extend([path] if count is None else [path.format(idx=i) for i in range(count)])
@@ -89,10 +99,28 @@ class ConsoleTests(unittest.TestCase):
         output = io.StringIO()
         with contextlib.redirect_stdout(output):
             self.assertFalse(console.selftest(self.client))
-        self.assertEqual(len(self.requests), 34)
+        self.assertEqual(len(self.requests), 35)
         self.assertIn("DEVICE_TIMEOUT", output.getvalue())
         self.assertIn("ошибок 1", output.getvalue())
-        self.assertEqual(self.requests[-1][0], "/api/v1/vacuum/state")
+        self.assertEqual(self.requests[-1][0], "/api/v1/admin/mode")
+        self.assertEqual(self.posts, [])
+
+    def test_control_commands_tokens_and_validation(self):
+        self.client.admin_token = "admin"
+        with contextlib.redirect_stdout(io.StringIO()):
+            for command in ("set_pwm 5 123", "set_mode 2 4", "set_door_lock 1 1", "set_vacuum 0"):
+                self.assertTrue(console.execute(self.client, command))
+        self.assertEqual(self.posts, [
+            ("/api/v1/fans/5/pwm", "Bearer secret", {"pwm": 123}),
+            ("/api/v1/admin/mode", "Bearer admin", {"mode": 2, "idx": 4}),
+            ("/api/v1/admin/locks/1", "Bearer admin", {"lock_state": True}),
+            ("/api/v1/admin/vacuum", "Bearer admin", {"mode": 0}),
+        ])
+        for command in ("set_pwm 6 1", "set_pwm 0 256", "set_mode 3 0", "set_mode 1 6",
+                        "set_door_lock 2 1", "set_vacuum 2", "set_mode 1"):
+            with self.assertRaises(ValueError):
+                console.execute(self.client, command)
+        self.assertEqual(len(self.posts), 4)
 
     def test_redirect_is_failure_not_followed(self):
         self.redirect = True

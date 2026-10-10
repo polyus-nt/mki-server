@@ -60,8 +60,8 @@ class SerialTransport:
         while time.monotonic() < gap_end:
             time.sleep(0)
 
-    def exchange(self, command: Command, idx: int) -> dict:
-        request = Frame(self.tx_id, command.node, command.code, idx, self.session)
+    def exchange(self, command: Command, idx: int, data: bytes = bytes(8)) -> dict:
+        request = Frame(self.tx_id, command.node, command.code, idx, self.session, data=data)
         self.tx_id += 1
         if self.tx_id > 65535:
             self.tx_id = 1

@@ -9,7 +9,7 @@ from .settings import Settings
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Read-only FastAPI поверх хаба МС-ТЮК")
+    parser = argparse.ArgumentParser(description="User/Admin FastAPI поверх хаба МС-ТЮК")
     parser.add_argument("--serial-port", default=os.getenv("MSTJUK_SERIAL_PORT", ""), help="например COM15")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--http-port", type=int, default=8000)
@@ -25,7 +25,7 @@ def main():
         parser.error("HTTP порт должен быть 1..65535")
     try:
         settings = Settings(args.serial_port, args.queue_capacity, args.queue_timeout,
-                            args.exchange_timeout, token)
+                            args.exchange_timeout, token, os.getenv("MSTJUK_ADMIN_TOKEN") or None)
     except ValueError as error:
         parser.error(str(error))
     logging.basicConfig(level=logging.DEBUG if args.debug else logging.INFO)

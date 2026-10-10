@@ -6,10 +6,10 @@ from typing import Annotated
 from fastapi import Depends, FastAPI, Path, Request
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt
 
 from .errors import HubError
-from .protocol import COMMANDS, PROBE
+from .protocol import COMMANDS, PROBE, WRITE_COMMANDS
 from .service import HubService
 from .settings import Settings
 from .transport import SerialTransport
@@ -56,6 +56,38 @@ class VacuumState(BaseModel):
     received_at: datetime
 
 
+class ModeState(BaseModel):
+    mode: int
+    idx: int | None
+    received_at: datetime
+
+
+class Acknowledgement(BaseModel):
+    acknowledged: bool
+    received_at: datetime
+
+
+class PwmRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    pwm: StrictInt = Field(ge=0, le=255)
+
+
+class ModeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    mode: StrictInt = Field(ge=0, le=2)
+    idx: StrictInt = Field(ge=0, le=5)
+
+
+class LockRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    lock_state: StrictBool
+
+
+class VacuumRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    mode: StrictInt = Field(ge=0, le=1)
+
+
 Index3 = Annotated[int, Path(ge=0, le=2)]
 Index2 = Annotated[int, Path(ge=0, le=1)]
 Index6 = Annotated[int, Path(ge=0, le=5)]
@@ -78,13 +110,25 @@ def create_app(settings: Settings | None = None, transport_factory=SerialTranspo
 
     async def authorize(request: Request,
                         credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)]):
-        token = request.app.state.service.settings.api_token
-        if token and (credentials is None or not hmac.compare_digest(credentials.credentials.encode(), token.encode())):
+        configured = request.app.state.service.settings
+        tokens = [t for t in (configured.api_token, configured.admin_token) if t]
+        if configured.api_token and (credentials is None or not any(
+                hmac.compare_digest(credentials.credentials.encode(), t.encode()) for t in tokens)):
             raise HubError("UNAUTHORIZED", "Нужен Bearer token", 401)
+
+    async def authorize_admin(request: Request,
+                              credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)]):
+        token = request.app.state.service.settings.admin_token
+        if not token:
+            raise HubError("ADMIN_DISABLED", "Задайте MSTJUK_ADMIN_TOKEN для Admin API", 503)
+        if credentials is None:
+            raise HubError("UNAUTHORIZED", "Нужен административный Bearer token", 401)
+        if not hmac.compare_digest(credentials.credentials.encode(), token.encode()):
+            raise HubError("FORBIDDEN", "Нет доступа к Admin API", 403)
 
     app = FastAPI(title="МС-ТЮК Hub API", version="0.1.0", lifespan=lifespan,
                   dependencies=[Depends(authorize)],
-                  description="Read-only API фаблаб-теплицы. Запросы ждут FIFO и ответа оборудования.")
+                  description="User API: чтения и PWM. Admin API: режимы, замки, пылесос. Общая FIFO.")
 
     @app.exception_handler(HubError)
     async def hub_error_handler(request, error):
@@ -101,10 +145,15 @@ def create_app(settings: Settings | None = None, transport_factory=SerialTranspo
 
     @app.get("/api/v1/capabilities", tags=["service"])
     async def capabilities():
-        return {"greenhouse": "fablab", "protocol_version": 2, "access": "read-only",
+        return {"greenhouse": "fablab", "protocol_version": 2, "access": "user-and-admin",
                 "channels": {name: {"count": item.count, "node": item.node,
-                                    "command": f"0x{item.code:02X}"} for name, item in COMMANDS.items() if name != "vacuum"},
+                                    "command": f"0x{item.code:02X}"} for name, item in COMMANDS.items() if name not in ("vacuum", "mode")},
                 "vacuum": {"node": 16, "command": "0x52", "indexed": False},
+                "actuator_routes": [
+                    {"gateway_node": 14, "global_indices": [0, 1, 2, 3], "local_indices": [0, 1, 2, 3]},
+                    {"gateway_node": 17, "global_indices": [4, 5], "local_indices": [0, 1]},
+                ],
+                "admin_enabled": bool(app.state.service.settings.admin_token),
                 "chemreactor": "not_implemented"}
 
     @app.get("/api/v1/hub/probe", tags=["hub"])
@@ -140,6 +189,10 @@ def create_app(settings: Settings | None = None, transport_factory=SerialTranspo
     async def pwm(idx: Index6, request: Request):
         return await read(request, "pwm", idx)
 
+    @app.post("/api/v1/fans/{idx}/pwm", response_model=Reading, tags=["fans"])
+    async def set_pwm(idx: Index6, body: PwmRequest, request: Request):
+        return await request.app.state.service.read(WRITE_COMMANDS["pwm"], idx, bytes([body.pwm]) + bytes(7))
+
     @app.get("/api/v1/fans/{idx}/rpm", response_model=Reading, tags=["fans"])
     async def rpm(idx: Index6, request: Request):
         return await read(request, "rpm", idx)
@@ -152,6 +205,26 @@ def create_app(settings: Settings | None = None, transport_factory=SerialTranspo
     @app.get("/api/v1/vacuum/state", response_model=VacuumState, tags=["lmp8"])
     async def vacuum(request: Request):
         return await read(request, "vacuum", 0)
+
+    @app.get("/api/v1/admin/mode", response_model=ModeState, tags=["admin"],
+             dependencies=[Depends(authorize_admin)])
+    async def get_mode(request: Request):
+        return await read(request, "mode", 255)
+
+    @app.post("/api/v1/admin/mode", response_model=ModeState, tags=["admin"],
+              dependencies=[Depends(authorize_admin)])
+    async def set_mode(body: ModeRequest, request: Request):
+        return await request.app.state.service.read(WRITE_COMMANDS["mode"], body.idx, bytes([body.mode]) + bytes(7))
+
+    @app.post("/api/v1/admin/locks/{idx}", response_model=Acknowledgement, tags=["admin"],
+              dependencies=[Depends(authorize_admin)])
+    async def set_door_lock(idx: Index2, body: LockRequest, request: Request):
+        return await request.app.state.service.read(WRITE_COMMANDS["lock"], idx, bytes([body.lock_state]) + bytes(7))
+
+    @app.post("/api/v1/admin/vacuum", response_model=Acknowledgement, tags=["admin"],
+              dependencies=[Depends(authorize_admin)])
+    async def set_vacuum(body: VacuumRequest, request: Request):
+        return await request.app.state.service.read(WRITE_COMMANDS["vacuum"], 0, bytes([body.mode]) + bytes(7))
 
     return app
 

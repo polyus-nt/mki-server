@@ -21,6 +21,7 @@ class Job:
     queued_at: float
     result: asyncio.Future
     started: asyncio.Event
+    data: bytes = bytes(8)
 
 
 class HubService:
@@ -59,11 +60,13 @@ class HubService:
             self.fail(job, error)
             self.queue.task_done()
 
-    async def read(self, command: Command, idx: int):
+    async def read(self, command: Command, idx: int, data: bytes = bytes(8)):
         if not self.connected or self.closing:
             raise HubError("DISCONNECTED", "COM-порт недоступен")
         loop = asyncio.get_running_loop()
-        job = Job(command, idx, time.monotonic(), loop.create_future(), asyncio.Event())
+        if len(data) != 8:
+            raise ValueError("Hardware request data must contain 8 bytes")
+        job = Job(command, idx, time.monotonic(), loop.create_future(), asyncio.Event(), data)
         try:
             self.queue.put_nowait(job)
         except asyncio.QueueFull:
@@ -97,7 +100,10 @@ class HubService:
                     job.started.set()
                     recover = False
                     try:
-                        data = await self.io(self.transport.exchange, job.command, job.idx)
+                        # Для чтений оставляем прежнюю сигнатуру транспорта;
+                        # управляющий payload передаём явно, в той же FIFO.
+                        args = (job.command, job.idx, job.data) if job.command.name.startswith("set_") else (job.command, job.idx)
+                        data = await self.io(self.transport.exchange, *args)
                     except DeviceError as error:
                         self.last_response_at = datetime.now(timezone.utc).isoformat()
                         self.fail(job, error)

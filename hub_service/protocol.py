@@ -20,11 +20,20 @@ COMMANDS = {
     "pressure": Command("get_pressure", 0x23, 13, 3, "pressure"),
     "humidity": Command("get_humidity", 0x24, 13, 3, "humidity"),
     "dust": Command("get_dust", 0x25, 13, 2, "dust"),
+    # Компьютер использует node14 и глобальные idx0..5. Хаб сам переводит
+    # idx4/5 в node17 idx0/1 и восстанавливает исходные поля ответа.
     "pwm": Command("get_pwm", 0x30, 14, 6, "pwm"),
     "rpm": Command("get_rpm", 0x31, 14, 6, "rpm"),
     "door": Command("get_door_state", 0x22, 15, 2, "door"),
     "lock": Command("get_door_lock", 0x43, 16, 2, "lock"),
     "vacuum": Command("get_vacuum", 0x52, 16, 1, "vacuum"),
+    "mode": Command("get_mode", 0x40, 14, 0, "mode"),
+}
+WRITE_COMMANDS = {
+    "pwm": Command("set_pwm", 0x32, 14, 6, "pwm"),
+    "mode": Command("set_mode", 0x41, 14, 6, "mode"),
+    "lock": Command("set_door_lock", 0x42, 16, 2, "ack"),
+    "vacuum": Command("set_vacuum", 0x53, 16, 1, "ack"),
 }
 PROBE = Command("hub_probe", 0x20, 13, 0, "probe")
 STATUS_NAMES = ("OK", "INVALID_INDEX", "INVALID_ARGUMENT", "UNKNOWN_COMMAND",
@@ -132,6 +141,15 @@ def decode_result(command: Command, reply: Frame) -> dict:
         raise DeviceError(STATUS_NAMES[reply.status], "Оборудование вернуло ошибку",
                           STATUS_HTTP[reply.status], device_status=reply.status,
                           node=reply.node, command=command.name, idx=reply.idx)
+    if command.layout == "ack":
+        if any(data):
+            raise ValueError("Nonzero acknowledgement payload")
+        return {"acknowledged": True}
+    if command.layout == "mode":
+        mode, idx = data[:2]
+        if any(data[2:]) or mode > 2 or (idx != 255 if mode == 0 else idx >= 6):
+            raise ValueError("Invalid global mode/idx payload")
+        return {"mode": mode, "idx": None if mode == 0 else idx}
     result = {"idx": reply.idx}
     if command.layout in ("pwm", "rpm", "door", "lock", "vacuum"):
         size = 4 if command.layout == "rpm" else 1

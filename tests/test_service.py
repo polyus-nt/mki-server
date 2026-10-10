@@ -4,7 +4,7 @@ import time
 import unittest
 
 from hub_service.errors import DeviceError, HubError
-from hub_service.protocol import COMMANDS
+from hub_service.protocol import COMMANDS, WRITE_COMMANDS
 from hub_service.service import HubService
 from hub_service.settings import Settings
 
@@ -16,6 +16,7 @@ class FakeTransport:
         self.quiet_calls = self.closed = 0
         self.gate = threading.Event(); self.gate.set()
         self.error = None
+        self.payloads = []
 
     def quiet(self):
         self.threads.append(threading.get_ident())
@@ -25,9 +26,10 @@ class FakeTransport:
         self.threads.append(threading.get_ident())
         self.closed += 1
 
-    def exchange(self, command, idx):
+    def exchange(self, command, idx, data=bytes(8)):
         self.threads.append(threading.get_ident())
         self.calls.append((command.name, idx))
+        self.payloads.append(data)
         if not self.gate.wait(2):
             raise OSError("test gate timeout")
         if self.error:
@@ -64,6 +66,18 @@ class ServiceTests(unittest.IsolatedAsyncioTestCase):
         await service.close()
         self.assertEqual(len(set(self.port.threads)), 1)
         self.assertNotEqual(self.port.threads[0], threading.get_ident())
+
+    async def test_read_and_write_share_fifo_and_payload_is_preserved(self):
+        service = await self.start_service()
+        jobs = [(COMMANDS["rpm"], 5, bytes(8)),
+                (WRITE_COMMANDS["pwm"], 5, b"\xff" + bytes(7)),
+                (WRITE_COMMANDS["mode"], 4, b"\x02" + bytes(7)),
+                (WRITE_COMMANDS["vacuum"], 0, b"\x01" + bytes(7)),
+                (COMMANDS["pwm"], 0, bytes(8))]
+        await asyncio.gather(*(service.read(*job) for job in jobs))
+        self.assertEqual(self.port.calls, [(c.name, idx) for c, idx, _ in jobs])
+        self.assertEqual(self.port.payloads, [data for _, _, data in jobs])
+        self.assertEqual(len(set(self.port.threads)), 1)
 
     async def test_queue_full_and_cancellation_skips_unsent(self):
         service = await self.start_service(queue_capacity=1)
@@ -108,6 +122,16 @@ class ServiceTests(unittest.IsolatedAsyncioTestCase):
             await service.read(COMMANDS["pressure"], 0)
         await service.read(COMMANDS["pressure"], 2)
         self.assertEqual(self.port.quiet_calls, 3)
+
+    async def test_write_timeout_never_resends_set(self):
+        service = await self.start_service()
+        self.port.error = HubError("HOST_TIMEOUT", "lost SET reply", 504)
+        with self.assertRaises(HubError):
+            await service.read(WRITE_COMMANDS["pwm"], 5, b"\x64" + bytes(7))
+        await service.read(COMMANDS["pwm"], 5)
+        self.assertEqual(self.port.calls, [("set_pwm", 5), ("get_pwm", 5)])
+        self.assertEqual(self.port.payloads, [b"\x64" + bytes(7), bytes(8)])
+        self.assertEqual(self.port.quiet_calls, 2)
 
     async def test_disconnect_finishes_all_waiters(self):
         service = await self.start_service()

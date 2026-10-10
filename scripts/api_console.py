@@ -31,18 +31,29 @@ COMMANDS = {
     "rpm": ("/api/v1/fans/{idx}/rpm", 6),
     "lock": ("/api/v1/locks/{idx}/state", 2),
     "vacuum": ("/api/v1/vacuum/state", None),
+    "mode": ("/api/v1/admin/mode", None),
 }
+ALIASES = {"get_temp": "temp", "get_pressure": "pressure", "get_voc": "voc",
+           "get_humidity": "humidity", "get_dust": "dust", "get_door_state": "door",
+           "get_pwm": "pwm", "get_rpm": "rpm", "get_mode": "mode",
+           "get_vacuum": "vacuum", "get_door_lock": "lock", "set_pwm": "setpwm",
+           "set_mode": "setmode", "set_door_lock": "setlock", "set_vacuum": "setvacuum"}
 HELP = """health | capabilities | probe
 temp 0..2 | pressure 0..2 | voc 0..1 | humidity 0..2 | dust 0..1
 door 0..1 | pwm 0..5 | rpm 0..5 | lock 0..1 | vacuum
+set_pwm idx pwm — PWM 0..255, переключает вентилятор
+get_mode | set_mode mode idx — mode 0/1/2, idx 0..5 (Admin)
+set_door_lock idx 0|1 — 1 блокирует, 0 разблокирует (Admin)
+set_vacuum 0|1 — 1 включает, 0 выключает (Admin)
 get /api/v1/... — произвольный GET на этом же сервере
 selftest — последовательно все GET API и все допустимые индексы
 help | exit
-Только чтение: замки, PWM и пылесос не переключаются."""
+Selftest только читает; управляющие команды действительно переключают выходы.
+Admin-команды требуют MSTJUK_ADMIN_TOKEN."""
 
 
 class Client:
-    def __init__(self, base_url, timeout=45, token=None):
+    def __init__(self, base_url, timeout=45, token=None, admin_token=None):
         parsed = urlsplit(base_url)
         if (parsed.scheme not in ("http", "https") or not parsed.netloc
                 or parsed.username is not None or parsed.password is not None
@@ -53,17 +64,26 @@ class Client:
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
         self.token = token
+        self.admin_token = admin_token
         self.opener = build_opener(NoRedirect())
 
     def get(self, path):
+        return self.request(path)
+
+    def request(self, path, body=None):
         # Не даём произвольному get унести Bearer token на другой сервер.
         parsed = urlsplit(path)
         if not path.startswith("/") or path.startswith("//") or parsed.scheme or parsed.netloc or parsed.fragment:
             raise ValueError("Ожидается путь на этом сервере, начинающийся с /")
         headers = {"Accept": "application/json"}
-        if self.token:
-            headers["Authorization"] = "Bearer " + self.token
-        request = Request(self.base_url + path, headers=headers, method="GET")
+        token = (self.admin_token or self.token) if parsed.path.startswith("/api/v1/admin/") else self.token
+        if token:
+            headers["Authorization"] = "Bearer " + token
+        data = None
+        if body is not None:
+            headers["Content-Type"] = "application/json"
+            data = json.dumps(body).encode("utf-8")
+        request = Request(self.base_url + path, data=data, headers=headers, method="GET" if data is None else "POST")
         started = time.monotonic()
         try:
             try:
@@ -86,9 +106,9 @@ class Client:
             return False, None, {"error": {"message": str(error)}}, time.monotonic() - started
 
 
-def report(path, result, detailed=True):
+def report(path, result, detailed=True, method="GET"):
     ok, status, payload, elapsed = result
-    print(f"{'OK' if ok else 'FAIL'} GET {path} — HTTP {status if status is not None else '-'}, {elapsed:.2f} с")
+    print(f"{'OK' if ok else 'FAIL'} {method} {path} — HTTP {status if status is not None else '-'}, {elapsed:.2f} с")
     if detailed or not ok:
         print(json.dumps(payload, ensure_ascii=False, indent=2))
 
@@ -158,11 +178,40 @@ def execute(client, line):
     if not parts:
         return True
     command = parts[0].lower()
+    command = ALIASES.get(command, command)
     if command == "help" and len(parts) == 1:
         print(HELP)
         return True
     if command == "selftest" and len(parts) == 1:
         return selftest(client)
+    if command in ("setpwm", "setmode", "setlock", "setvacuum"):
+        required = 2 if command == "setvacuum" else 3
+        if len(parts) != required:
+            raise ValueError("Неверное число аргументов. Введите help.")
+        values = [int(value) for value in parts[1:]]
+        if command == "setpwm":
+            idx, pwm = values
+            if not (0 <= idx <= 5 and 0 <= pwm <= 255):
+                raise ValueError("set_pwm: idx 0..5, PWM 0..255")
+            path, body = f"/api/v1/fans/{idx}/pwm", {"pwm": pwm}
+        elif command == "setmode":
+            mode, idx = values
+            if not (0 <= mode <= 2 and 0 <= idx <= 5):
+                raise ValueError("set_mode: mode 0..2, idx 0..5")
+            path, body = "/api/v1/admin/mode", {"mode": mode, "idx": idx}
+        elif command == "setlock":
+            idx, state = values
+            if not (0 <= idx <= 1 and state in (0, 1)):
+                raise ValueError("set_door_lock: idx 0..1, состояние 0/1")
+            path, body = f"/api/v1/admin/locks/{idx}", {"lock_state": bool(state)}
+        else:
+            mode = values[0]
+            if mode not in (0, 1):
+                raise ValueError("set_vacuum: 0 выключает, 1 включает")
+            path, body = "/api/v1/admin/vacuum", {"mode": mode}
+        result = client.request(path, body)
+        report(path, result, method="POST")
+        return result[0]
     if command == "get" and len(parts) == 2:
         path = parts[1]
     elif command in COMMANDS:
@@ -191,7 +240,7 @@ def main():
     parser.add_argument("--command", help='одна команда, например "temp 0" или "selftest"')
     args = parser.parse_args()
     try:
-        client = Client(args.url, args.timeout, os.getenv("MSTJUK_API_TOKEN"))
+        client = Client(args.url, args.timeout, os.getenv("MSTJUK_API_TOKEN"), os.getenv("MSTJUK_ADMIN_TOKEN"))
     except ValueError as error:
         parser.error(str(error))
     try:
