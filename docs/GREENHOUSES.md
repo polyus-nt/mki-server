@@ -87,7 +87,7 @@ usercode по адресу 0x08003800, не в начало flash и не пов
 ## Теплица-химреактор — отдельный проект
 
 Реализация находится в [chem-reactor-теплица](../chem-reactor-теплица/README.md).
-Полная распиновка: [PINOUT.md](../chem-reactor-теплица/PINOUT.md),
+Полная распиновка: [PINOUT.md в tjc-sketch](../../tjc-sketch/chem-reactor-теплица/PINOUT.md),
 пользовательский API: [API.md](../chem-reactor-теплица/API.md).
 
 Сохранённая распиновка датчиков Arduino:

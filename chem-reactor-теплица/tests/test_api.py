@@ -1,10 +1,9 @@
 import importlib.util
 import os
 from pathlib import Path
+from dataclasses import replace
 import select
-import shutil
 import subprocess
-import tempfile
 import threading
 import time
 import unittest
@@ -13,28 +12,63 @@ from fastapi.testclient import TestClient
 from hub_service.app import create_app
 from hub_service.protocol import Frame, decode_result, envelope
 from hub_service.settings import Settings
-from scripts.test_firmware import compile_test
 
 ROOT = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location("chem_console", ROOT / "scripts/api_console.py")
 console = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(console)
-CXX = os.environ.get("CXX", "g++")
 
 
 class ChainPort:
-    """Only UART/GPIO mocked; routing and replies from production C++ firmware."""
-    binary = None
+    """Standalone wire mock, or opt-in production C++ bridge from tjc-sketch."""
+    binary = os.environ.get("CHEM_FIRMWARE_CHAIN")
 
     def __init__(self, settings):
-        self.process = subprocess.Popen([str(self.binary), "--bridge"], stdin=subprocess.PIPE,
-                                        stdout=subprocess.PIPE, text=True)
+        self.process = (subprocess.Popen([str(self.binary), "--bridge"], stdin=subprocess.PIPE,
+                                        stdout=subprocess.PIPE, text=True) if self.binary else None)
         self.requests = []
+        self.pwm = [0, 0]
+        self.mode, self.mode_idx, self.locked, self.level = 0, 255, False, 0
 
     def quiet(self):
         pass
 
     def packet(self, packet):
+        if self.process is None:
+            request = Frame.decode(packet)
+            cmd, idx = request.command, request.idx
+            data, status = bytes(8), 0
+            if cmd == 0x20 and idx == 2:
+                status = 1  # Expected local hub probe.
+            elif cmd in (0x20, 0x23, 0x24, 0x26):
+                value = {0x20: -1234 + idx, 0x23: 100653 + idx,
+                         0x24: 5550 + idx, 0x26: (512 << 16) | 2502}[cmd]
+                data = (value & 0xffffffff).to_bytes(4, "big") + bytes.fromhex("03 00 7b 00")
+            elif cmd == 0x22:
+                data = bytes([idx == 0]) + bytes(7)
+            elif cmd == 0x31:
+                data = (1200 + idx).to_bytes(4, "big") + bytes(4)
+            elif cmd in (0x30, 0x32):
+                if cmd == 0x32:
+                    self.pwm[idx] = 230 if self.mode == 2 and idx == self.mode_idx else request.data[0]
+                data = bytes([self.pwm[idx]]) + bytes(7)
+            elif cmd in (0x40, 0x41):
+                if cmd == 0x41:
+                    self.mode = request.data[0]
+                    self.mode_idx = idx if self.mode else 255
+                data = bytes([self.mode, self.mode_idx]) + bytes(6)
+            elif cmd in (0x42, 0x43):
+                if cmd == 0x42:
+                    self.locked = bool(request.data[0])
+                else:
+                    data = bytes([self.locked]) + bytes(7)
+            elif cmd in (0x50, 0x51):
+                if cmd == 0x51:
+                    self.level = request.data[0]
+                data = bytes([self.level]) + bytes(7)
+            else:
+                status = 3
+            return Frame.decode(replace(request, kind=2, status=status, data=data).encode())
         self.process.stdin.write(packet.hex() + "\n")
         self.process.stdin.flush()
         result = self.process.stdout.readline()
@@ -50,26 +84,16 @@ class ChainPort:
         return decode_result(command, reply)
 
     def close(self):
+        if self.process is None:
+            return
         if self.process.stdin:
             self.process.stdin.close()
         self.process.wait(timeout=2)
         self.process.stdout.close()
 
 
-@unittest.skipUnless(shutil.which(CXX), "Set CXX to a C++11 compiler for firmware integration")
 class ApiTests(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        cls.temp = tempfile.TemporaryDirectory(prefix="chem-api-")
-        cls.binary = Path(cls.temp.name) / "firmware.exe"
-        compile_test(ROOT / "tests/firmware_chain.cpp", cls.binary, CXX)
-        ChainPort.binary = cls.binary
-
-    @classmethod
-    def tearDownClass(cls):
-        cls.temp.cleanup()
-
-    def test_all_gets_through_real_cpp_firmware(self):
+    def test_all_gets_through_wire_protocol(self):
         with TestClient(create_app(Settings("fake"), ChainPort)) as client:
             paths = console.selftest_paths(client.get("/openapi.json").json())
             self.assertEqual(len(paths), 20)
@@ -129,7 +153,7 @@ class ApiTests(unittest.TestCase):
             self.assertNotIn("securitySchemes", client.get("/openapi.json").json()["components"])
 
     @unittest.skipUnless(os.name == "posix", "PTY requires POSIX")
-    def test_http_pyserial_simplebus_cpp_chain_and_back(self):
+    def test_http_pyserial_simplebus_chain_and_back(self):
         master, slave = os.openpty()
         port = ChainPort(Settings("fake"))
         stop = threading.Event()
