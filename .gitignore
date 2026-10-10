@@ -9,3 +9,5 @@ target/
 *.db
 *.db-shm
 *.db-wal
+build/
+.pio/
