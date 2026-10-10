@@ -6,6 +6,7 @@ Rust-приложение использует Hardware API v2: фиксиров
 физический стенд пока не проверен.
 
 - [Архитектура](docs/HARDWARE-API-ARCHITECTURE.md)
+- [Конфигурации фаблаб-теплицы и теплицы-химреактора](docs/GREENHOUSE-CONFIGURATIONS.md)
 - [Человекочитаемый протокол](docs/HARDWARE-PROTOCOL.md)
 - [Статус прошивок и ограничения](docs/FIRMWARE-IMPLEMENTATION.md)
 - [JSON и golden-векторы](docs/protocol/hardware-v2.json)
