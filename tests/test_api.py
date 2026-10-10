@@ -3,6 +3,7 @@ from dataclasses import replace
 import os
 import threading
 import unittest
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 import httpx
@@ -119,54 +120,51 @@ class ApiTests(unittest.TestCase):
             self.assertEqual(writes, {"/api/v1/fans/{idx}/pwm", "/api/v1/admin/mode",
                                       "/api/v1/admin/locks/{idx}", "/api/v1/admin/vacuum"})
 
-    def test_controls_admin_separation_and_strict_bodies(self):
-        app = create_app(Settings("test", api_token="user", admin_token="admin"), FakeTransport)
-        user = {"Authorization": "Bearer user"}
-        admin = {"Authorization": "Bearer admin"}
+    def test_controls_without_authorization_and_strict_bodies(self):
+        app = create_app(Settings("test"), FakeTransport)
         with TestClient(app) as client:
             port = app.state.service.transport
-            result = client.post("/api/v1/fans/5/pwm", json={"pwm": 123}, headers=user)
+            result = client.post("/api/v1/fans/5/pwm", json={"pwm": 123})
             self.assertEqual(result.status_code, 200, result.text)
             self.assertEqual(result.json()["idx"], 5)
             self.assertEqual(result.json()["value"], 123)
             self.assertEqual(port.calls[-1], (14, 0x32, 5))
             self.assertEqual(port.last_data, b"\x7b" + bytes(7))
-            before = len(port.calls)
-            for path, body in (("mode", {"mode": 1, "idx": 4}), ("locks/0", {"lock_state": True}),
-                               ("vacuum", {"mode": 1})):
-                self.assertEqual(client.post("/api/v1/admin/" + path, json=body, headers=user).status_code, 403)
-            self.assertEqual(client.get("/api/v1/admin/mode", headers=user).status_code, 403)
-            self.assertEqual(len(port.calls), before)
-            self.assertEqual(client.get("/api/v1/admin/mode", headers=admin).json()["idx"], None)
-            result = client.post("/api/v1/admin/mode", json={"mode": 1, "idx": 4}, headers=admin)
+            self.assertEqual(client.get("/api/v1/admin/mode").json()["idx"], None)
+            result = client.post("/api/v1/admin/mode", json={"mode": 1, "idx": 4})
             self.assertEqual(result.status_code, 200, result.text)
             self.assertEqual(result.json()["idx"], 4)
             self.assertEqual(port.calls[-1], (14, 0x41, 4))
             self.assertEqual(port.last_data, b"\x01" + bytes(7))
             for path, body, code, idx in (("locks/1", {"lock_state": True}, 0x42, 1),
                                           ("vacuum", {"mode": 1}, 0x53, 0)):
-                result = client.post("/api/v1/admin/" + path, json=body, headers=admin)
+                result = client.post("/api/v1/admin/" + path, json=body)
                 self.assertEqual(result.status_code, 200, result.text)
                 self.assertTrue(result.json()["acknowledged"])
                 self.assertEqual(port.calls[-1], (16, code, idx))
                 self.assertEqual(port.last_data, b"\x01" + bytes(7))
             before = len(port.calls)
             for body in ({"pwm": -1}, {"pwm": 256}, {"pwm": True}, {"pwm": "100"}, {"pwm": 100, "extra": 1}):
-                self.assertEqual(client.post("/api/v1/fans/0/pwm", json=body, headers=user).status_code, 422)
+                self.assertEqual(client.post("/api/v1/fans/0/pwm", json=body).status_code, 422)
             for path, body in (("mode", {"mode": 3, "idx": 0}), ("mode", {"mode": 1, "idx": 6}),
                                ("vacuum", {"mode": True}), ("vacuum", {"mode": 2}),
                                ("locks/0", {"lock_state": 1})):
-                self.assertEqual(client.post("/api/v1/admin/" + path, json=body, headers=admin).status_code, 422)
+                self.assertEqual(client.post("/api/v1/admin/" + path, json=body).status_code, 422)
             self.assertEqual(len(port.calls), before)
 
-    def test_admin_disabled_without_separate_token(self):
+    def test_openapi_has_no_security_and_admin_is_enabled(self):
         app = create_app(Settings("test"), FakeTransport)
         with TestClient(app) as client:
-            self.assertEqual(client.get("/api/v1/admin/mode").status_code, 503)
-            self.assertEqual(client.post("/api/v1/admin/vacuum", json={"mode": 1}).status_code, 503)
+            schema = client.get("/openapi.json").json()
+            self.assertNotIn("securitySchemes", schema.get("components", {}))
+            self.assertNotIn("security", schema)
+            for operations in schema["paths"].values():
+                for operation in operations.values():
+                    self.assertNotIn("security", operation)
+            capabilities = client.get("/api/v1/capabilities").json()
+            self.assertTrue(capabilities["admin_enabled"])
+            self.assertEqual(capabilities["authentication"], "none")
             self.assertEqual(app.state.service.transport.calls, [])
-        with self.assertRaises(ValueError):
-            Settings("test", api_token="same", admin_token="same")
 
     def test_device_error_is_structured_http_504(self):
         app = create_app(Settings("test"), FakeTransport)
@@ -178,13 +176,14 @@ class ApiTests(unittest.TestCase):
             self.assertEqual(result.json()["error"]["device_status"], 7)
             self.assertEqual(len(app.state.service.transport.calls), 1)
 
-    def test_optional_token(self):
-        app = create_app(Settings("test", api_token="test-token"), FakeTransport)
-        with TestClient(app) as client:
-            for headers in ({}, {"Authorization": "Bearer wrong"}):
-                self.assertEqual(client.get("/api/v1/pressure/0", headers=headers).status_code, 401)
-            self.assertEqual(app.state.service.transport.calls, [])
-            self.assertEqual(client.get("/api/v1/pressure/0", headers={"Authorization": "Bearer test-token"}).status_code, 200)
+    def test_old_token_env_does_not_change_access(self):
+        with patch.dict(os.environ, {"MSTJUK_SERIAL_PORT": "test", "MSTJUK_API_TOKEN": "old-user",
+                                     "MSTJUK_ADMIN_TOKEN": "old-admin"}):
+            app = create_app(Settings.from_env(), FakeTransport)
+            with TestClient(app) as client:
+                self.assertEqual(client.get("/api/v1/pressure/0").status_code, 200)
+                self.assertEqual(client.get("/api/v1/admin/mode").status_code, 200)
+                self.assertEqual(client.post("/api/v1/admin/vacuum", json={"mode": 1}).status_code, 200)
 
     def test_open_failure_stops_lifespan(self):
         def factory(settings):

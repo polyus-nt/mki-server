@@ -3,7 +3,6 @@ import argparse
 from http.client import HTTPException
 import json
 import math
-import os
 import shlex
 import time
 from urllib.error import HTTPError, URLError
@@ -12,7 +11,7 @@ from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 
 class NoRedirect(HTTPRedirectHandler):
-    # Bearer token нельзя пересылать на адрес из HTTP Location.
+    # Смена адреса через Location не должна незаметно менять проверяемый сервер.
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         return None
 
@@ -49,11 +48,11 @@ get /api/v1/... — произвольный GET на этом же сервер
 selftest — последовательно все GET API и все допустимые индексы
 help | exit
 Selftest только читает; управляющие команды действительно переключают выходы.
-Admin-команды требуют MSTJUK_ADMIN_TOKEN."""
+User/Admin — группы методов без авторизации."""
 
 
 class Client:
-    def __init__(self, base_url, timeout=45, token=None, admin_token=None):
+    def __init__(self, base_url, timeout=45):
         parsed = urlsplit(base_url)
         if (parsed.scheme not in ("http", "https") or not parsed.netloc
                 or parsed.username is not None or parsed.password is not None
@@ -63,22 +62,17 @@ class Client:
             raise ValueError("--timeout должен быть конечным положительным числом")
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
-        self.token = token
-        self.admin_token = admin_token
         self.opener = build_opener(NoRedirect())
 
     def get(self, path):
         return self.request(path)
 
     def request(self, path, body=None):
-        # Не даём произвольному get унести Bearer token на другой сервер.
+        # Принимаем только пути на явно выбранном сервере.
         parsed = urlsplit(path)
         if not path.startswith("/") or path.startswith("//") or parsed.scheme or parsed.netloc or parsed.fragment:
             raise ValueError("Ожидается путь на этом сервере, начинающийся с /")
         headers = {"Accept": "application/json"}
-        token = (self.admin_token or self.token) if parsed.path.startswith("/api/v1/admin/") else self.token
-        if token:
-            headers["Authorization"] = "Bearer " + token
         data = None
         if body is not None:
             headers["Content-Type"] = "application/json"
@@ -240,7 +234,7 @@ def main():
     parser.add_argument("--command", help='одна команда, например "temp 0" или "selftest"')
     args = parser.parse_args()
     try:
-        client = Client(args.url, args.timeout, os.getenv("MSTJUK_API_TOKEN"), os.getenv("MSTJUK_ADMIN_TOKEN"))
+        client = Client(args.url, args.timeout)
     except ValueError as error:
         parser.error(str(error))
     try:

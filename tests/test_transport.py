@@ -141,7 +141,7 @@ class TransportTests(unittest.TestCase):
 
         thread = threading.Thread(target=hardware, daemon=True); thread.start()
         try:
-            with TestClient(create_app(Settings(os.ttyname(slave), admin_token="admin"))) as client:
+            with TestClient(create_app(Settings(os.ttyname(slave)))) as client:
                 self.assertTrue(client.get("/api/v1/hub/probe").json()["responding"])
                 response = client.get("/api/v1/pressure/0")
                 self.assertEqual(response.status_code, 200, response.text)
@@ -156,13 +156,12 @@ class TransportTests(unittest.TestCase):
                 result = client.post("/api/v1/fans/5/pwm", json={"pwm": 100})
                 self.assertEqual(result.status_code, 200, result.text)
                 self.assertEqual(result.json()["value"], 100)
-                headers = {"Authorization": "Bearer admin"}
-                self.assertIsNone(client.get("/api/v1/admin/mode", headers=headers).json()["idx"])
-                result = client.post("/api/v1/admin/mode", json={"mode": 2, "idx": 4}, headers=headers)
+                self.assertIsNone(client.get("/api/v1/admin/mode").json()["idx"])
+                result = client.post("/api/v1/admin/mode", json={"mode": 2, "idx": 4})
                 self.assertEqual(result.status_code, 200, result.text)
                 self.assertEqual(result.json()["idx"], 4)
                 for path, body in (("vacuum", {"mode": 1}), ("locks/1", {"lock_state": True})):
-                    result = client.post("/api/v1/admin/" + path, json=body, headers=headers)
+                    result = client.post("/api/v1/admin/" + path, json=body)
                     self.assertEqual(result.status_code, 200, result.text)
                     self.assertTrue(result.json()["acknowledged"])
             self.assertEqual(len(requests), 20)

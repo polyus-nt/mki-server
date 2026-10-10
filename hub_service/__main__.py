@@ -18,17 +18,16 @@ def main():
     parser.add_argument("--exchange-timeout", type=float, default=5)
     parser.add_argument("--debug", action="store_true", help="журнал RX RAW и кадров TX API")
     args = parser.parse_args()
-    token = os.getenv("MSTJUK_API_TOKEN") or None
-    if args.host not in ("127.0.0.1", "::1", "localhost") and not token:
-        parser.error("Для доступа не с localhost задайте MSTJUK_API_TOKEN")
     if not 1 <= args.http_port <= 65535:
         parser.error("HTTP порт должен быть 1..65535")
     try:
         settings = Settings(args.serial_port, args.queue_capacity, args.queue_timeout,
-                            args.exchange_timeout, token, os.getenv("MSTJUK_ADMIN_TOKEN") or None)
+                            args.exchange_timeout)
     except ValueError as error:
         parser.error(str(error))
     logging.basicConfig(level=logging.DEBUG if args.debug else logging.INFO)
+    if args.host not in ("127.0.0.1", "::1", "localhost"):
+        logging.warning("API без авторизации доступен по сети: любой клиент может управлять аппаратурой")
     # Несколько workers открыли бы один и тот же аппаратный порт.
     uvicorn.run(create_app(settings), host=args.host, port=args.http_port, workers=1,
                 log_level="debug" if args.debug else "info")

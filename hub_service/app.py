@@ -1,11 +1,9 @@
 from contextlib import asynccontextmanager
 from datetime import datetime
-import hmac
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, Path, Request
+from fastapi import FastAPI, Path, Request
 from fastapi.responses import JSONResponse
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt
 
 from .errors import HubError
@@ -106,34 +104,12 @@ def create_app(settings: Settings | None = None, transport_factory=SerialTranspo
         finally:
             await service.close()
 
-    bearer = HTTPBearer(auto_error=False)
-
-    async def authorize(request: Request,
-                        credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)]):
-        configured = request.app.state.service.settings
-        tokens = [t for t in (configured.api_token, configured.admin_token) if t]
-        if configured.api_token and (credentials is None or not any(
-                hmac.compare_digest(credentials.credentials.encode(), t.encode()) for t in tokens)):
-            raise HubError("UNAUTHORIZED", "Нужен Bearer token", 401)
-
-    async def authorize_admin(request: Request,
-                              credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)]):
-        token = request.app.state.service.settings.admin_token
-        if not token:
-            raise HubError("ADMIN_DISABLED", "Задайте MSTJUK_ADMIN_TOKEN для Admin API", 503)
-        if credentials is None:
-            raise HubError("UNAUTHORIZED", "Нужен административный Bearer token", 401)
-        if not hmac.compare_digest(credentials.credentials.encode(), token.encode()):
-            raise HubError("FORBIDDEN", "Нет доступа к Admin API", 403)
-
     app = FastAPI(title="МС-ТЮК Hub API", version="0.1.0", lifespan=lifespan,
-                  dependencies=[Depends(authorize)],
-                  description="User API: чтения и PWM. Admin API: режимы, замки, пылесос. Общая FIFO.")
+                  description="User/Admin — логические группы методов без авторизации. Общая FIFO.")
 
     @app.exception_handler(HubError)
     async def hub_error_handler(request, error):
-        headers = {"WWW-Authenticate": "Bearer"} if error.http_status == 401 else None
-        return JSONResponse(error.as_dict(), status_code=error.http_status, headers=headers)
+        return JSONResponse(error.as_dict(), status_code=error.http_status)
 
     async def read(request: Request, name: str, idx: int):
         return await request.app.state.service.read(COMMANDS[name], idx)
@@ -153,7 +129,7 @@ def create_app(settings: Settings | None = None, transport_factory=SerialTranspo
                     {"gateway_node": 14, "global_indices": [0, 1, 2, 3], "local_indices": [0, 1, 2, 3]},
                     {"gateway_node": 17, "global_indices": [4, 5], "local_indices": [0, 1]},
                 ],
-                "admin_enabled": bool(app.state.service.settings.admin_token),
+                "admin_enabled": True, "authentication": "none",
                 "chemreactor": "not_implemented"}
 
     @app.get("/api/v1/hub/probe", tags=["hub"])
@@ -206,23 +182,19 @@ def create_app(settings: Settings | None = None, transport_factory=SerialTranspo
     async def vacuum(request: Request):
         return await read(request, "vacuum", 0)
 
-    @app.get("/api/v1/admin/mode", response_model=ModeState, tags=["admin"],
-             dependencies=[Depends(authorize_admin)])
+    @app.get("/api/v1/admin/mode", response_model=ModeState, tags=["admin"])
     async def get_mode(request: Request):
         return await read(request, "mode", 255)
 
-    @app.post("/api/v1/admin/mode", response_model=ModeState, tags=["admin"],
-              dependencies=[Depends(authorize_admin)])
+    @app.post("/api/v1/admin/mode", response_model=ModeState, tags=["admin"])
     async def set_mode(body: ModeRequest, request: Request):
         return await request.app.state.service.read(WRITE_COMMANDS["mode"], body.idx, bytes([body.mode]) + bytes(7))
 
-    @app.post("/api/v1/admin/locks/{idx}", response_model=Acknowledgement, tags=["admin"],
-              dependencies=[Depends(authorize_admin)])
+    @app.post("/api/v1/admin/locks/{idx}", response_model=Acknowledgement, tags=["admin"])
     async def set_door_lock(idx: Index2, body: LockRequest, request: Request):
         return await request.app.state.service.read(WRITE_COMMANDS["lock"], idx, bytes([body.lock_state]) + bytes(7))
 
-    @app.post("/api/v1/admin/vacuum", response_model=Acknowledgement, tags=["admin"],
-              dependencies=[Depends(authorize_admin)])
+    @app.post("/api/v1/admin/vacuum", response_model=Acknowledgement, tags=["admin"])
     async def set_vacuum(body: VacuumRequest, request: Request):
         return await request.app.state.service.read(WRITE_COMMANDS["vacuum"], 0, bytes([body.mode]) + bytes(7))
 

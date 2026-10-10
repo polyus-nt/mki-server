@@ -63,20 +63,20 @@ class ConsoleTests(unittest.TestCase):
         self.server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
-        self.client = console.Client(f"http://127.0.0.1:{self.server.server_port}", token="secret")
+        self.client = console.Client(f"http://127.0.0.1:{self.server.server_port}")
 
     def tearDown(self):
         self.server.shutdown()
         self.server.server_close()
         self.thread.join()
 
-    def test_commands_json_token_and_invalid_index(self):
+    def test_commands_json_without_auth_and_invalid_index(self):
         output = io.StringIO()
         with contextlib.redirect_stdout(output):
             self.assertTrue(console.execute(self.client, "temp 2"))
             self.assertTrue(console.execute(self.client, "vacuum"))
-        self.assertEqual(self.requests, [("/api/v1/temperature/2", "Bearer secret"),
-                                         ("/api/v1/vacuum/state", "Bearer secret")])
+        self.assertEqual(self.requests, [("/api/v1/temperature/2", None),
+                                         ("/api/v1/vacuum/state", None)])
         self.assertIn('"value": 12', output.getvalue())
         for command in ("temp 3", "lock -1", "vacuum 0", "pwm", "bogus", "get https://evil.test/"):
             with self.assertRaises(ValueError):
@@ -105,16 +105,15 @@ class ConsoleTests(unittest.TestCase):
         self.assertEqual(self.requests[-1][0], "/api/v1/admin/mode")
         self.assertEqual(self.posts, [])
 
-    def test_control_commands_tokens_and_validation(self):
-        self.client.admin_token = "admin"
+    def test_control_commands_without_auth_and_validation(self):
         with contextlib.redirect_stdout(io.StringIO()):
             for command in ("set_pwm 5 123", "set_mode 2 4", "set_door_lock 1 1", "set_vacuum 0"):
                 self.assertTrue(console.execute(self.client, command))
         self.assertEqual(self.posts, [
-            ("/api/v1/fans/5/pwm", "Bearer secret", {"pwm": 123}),
-            ("/api/v1/admin/mode", "Bearer admin", {"mode": 2, "idx": 4}),
-            ("/api/v1/admin/locks/1", "Bearer admin", {"lock_state": True}),
-            ("/api/v1/admin/vacuum", "Bearer admin", {"mode": 0}),
+            ("/api/v1/fans/5/pwm", None, {"pwm": 123}),
+            ("/api/v1/admin/mode", None, {"mode": 2, "idx": 4}),
+            ("/api/v1/admin/locks/1", None, {"lock_state": True}),
+            ("/api/v1/admin/vacuum", None, {"mode": 0}),
         ])
         for command in ("set_pwm 6 1", "set_pwm 0 256", "set_mode 3 0", "set_mode 1 6",
                         "set_door_lock 2 1", "set_vacuum 2", "set_mode 1"):
@@ -132,10 +131,12 @@ class ConsoleTests(unittest.TestCase):
     def test_one_shot_selftest_exit_codes(self):
         command = [sys.executable, str(Path(console.__file__)), "--url", self.client.base_url,
                    "--command", "selftest"]
-        env = dict(os.environ, PYTHONIOENCODING="utf-8")
+        env = dict(os.environ, PYTHONIOENCODING="utf-8", MSTJUK_API_TOKEN="obsolete-user",
+                   MSTJUK_ADMIN_TOKEN="obsolete-admin")
         result = subprocess.run(command, capture_output=True, encoding="utf-8", env=env, timeout=10)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("ошибок 0", result.stdout)
+        self.assertTrue(all(auth is None for _, auth in self.requests))
         self.failed_path = "/api/v1/voc/1"
         result = subprocess.run(command, capture_output=True, encoding="utf-8", env=env, timeout=10)
         self.assertEqual(result.returncode, 1, result.stderr)
