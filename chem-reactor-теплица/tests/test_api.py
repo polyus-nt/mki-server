@@ -28,7 +28,7 @@ class ChainPort:
                                         stdout=subprocess.PIPE, text=True) if self.binary else None)
         self.requests = []
         self.pwm = [0, 0]
-        self.locked, self.level = False, 0
+        self.locked, self.level = True, 0
 
     def quiet(self):
         pass
@@ -90,6 +90,9 @@ class ChainPort:
 class ApiTests(unittest.TestCase):
     def test_all_gets_through_wire_protocol(self):
         with TestClient(create_app(Settings("fake"), ChainPort)) as client:
+            self.assertTrue(client.get("/api/v1/lock/state").json()["lock_output_enabled"])
+            self.assertTrue(client.get("/api/v1/doors/0/state").json()["closed"])
+            self.assertFalse(client.get("/api/v1/doors/1/state").json()["closed"])
             paths = console.selftest_paths(client.get("/openapi.json").json())
             self.assertEqual(len(paths), 19)
             for path in paths:

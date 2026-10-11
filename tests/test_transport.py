@@ -52,12 +52,14 @@ class TransportTests(unittest.TestCase):
         self.assertEqual(port.port.options["baudrate"], 9600)
         self.assertFalse(port.port.options["rtscts"])
         self.assertFalse(port.port.options["xonxoff"])
+        port.quiet = unittest.mock.Mock()
         port.tx_id, port.session = 65535, (1 << 64) - 1
         first = port.exchange(COMMANDS["pressure"], 0)
         second = port.exchange(COMMANDS["pressure"], 1)
         self.assertEqual(first["value"], 100653)
         self.assertEqual(second["idx"], 1)
         self.assertEqual([(r.tx_id, r.session_id) for r in port.port.requests], [(65535, (1 << 64)-1), (1, 1)])
+        self.assertEqual(port.quiet.call_count, 2)
         port.close(); self.assertTrue(port.port.closed)
 
     def test_quiet_has_bounded_noise_recovery(self):
@@ -72,9 +74,24 @@ class TransportTests(unittest.TestCase):
             with self.assertRaisesRegex(OSError, "3 с"):
                 port.quiet()
 
+    def test_quiet_can_finish_between_autonomous_polls(self):
+        with patch("hub_service.transport.serial.Serial", SerialFake):
+            port = SerialTransport(Settings("test"))
+        now = [0.0]
+        def polling(timeout):
+            now[0] += timeout
+            return b"background traffic" if now[0] <= .4 else b""
+        port.read = polling
+        with patch("hub_service.transport.time.monotonic", side_effect=lambda: now[0]):
+            port.quiet()
+        # Последний байт ~0.4, тишина 1 с закончилась до следующего опроса.
+        self.assertGreaterEqual(now[0], 1.35)
+        self.assertLess(now[0], 1.9)
+
     def test_raw_silence_is_host_timeout(self):
         with patch("hub_service.transport.serial.Serial", SerialFake):
             port = SerialTransport(Settings("test", exchange_timeout=.01))
+        port.quiet = lambda: None
         port.send = lambda packet, deadline: None
         port.read = lambda timeout: b""
         with self.assertRaises(HubError) as error:

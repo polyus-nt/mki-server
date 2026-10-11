@@ -61,6 +61,10 @@ class SerialTransport:
             time.sleep(0)
 
     def exchange(self, command: Command, idx: int, data: bytes = bytes(8)) -> dict:
+        # Хаб делает автономные опросы. Сначала дождаться 1 с тишины:
+        # его межопросная пауза 1.5 с оставляет окно для начала кадра PC.
+        # Это ожидание вне таймаута самого запроса; один процесс владеет портом.
+        self.quiet()
         request = Frame(self.tx_id, command.node, command.code, idx, self.session, data=data)
         self.tx_id += 1
         if self.tx_id > 65535:
