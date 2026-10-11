@@ -1,0 +1,21 @@
+[package]
+name = "chem-sensor-plots"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.91"
+
+[features]
+default = ["gui"]
+gui = ["dep:eframe", "dep:egui_plot", "dep:reqwest"]
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+eframe = { version = "=0.31.1", default-features = false, features = ["default_fonts", "glow", "x11"], optional = true }
+egui_plot = { version = "=0.32.1", optional = true }
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"], optional = true }
+
+[[bin]]
+name = "chem-sensor-plots"
+path = "src/main.rs"
+required-features = ["gui"]

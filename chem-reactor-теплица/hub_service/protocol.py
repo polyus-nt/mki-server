@@ -24,11 +24,9 @@ COMMANDS = {
     "door": Command("get_door_state", 0x22, 15, 2, "door"),
     "lock": Command("get_door_lock", 0x43, 16, 1, "lock"),
     "relay": Command("get_relay_level", 0x50, 16, 1, "relay"),
-    "mode": Command("get_mode", 0x40, 14, 0, "mode"),
 }
 WRITE_COMMANDS = {
     "pwm": Command("set_pwm", 0x32, 14, 2, "pwm"),
-    "mode": Command("set_mode", 0x41, 14, 2, "mode"),
     "lock": Command("set_door_lock", 0x42, 16, 1, "ack"),
     "relay": Command("set_relay_level", 0x51, 16, 1, "relay"),
 }
@@ -142,11 +140,6 @@ def decode_result(command: Command, reply: Frame) -> dict:
         if any(data):
             raise ValueError("Nonzero acknowledgement payload")
         return {"acknowledged": True}
-    if command.layout == "mode":
-        mode, idx = data[:2]
-        if any(data[2:]) or mode > 2 or (idx != 255 if mode == 0 else idx >= 2):
-            raise ValueError("Invalid global mode/idx payload")
-        return {"mode": mode, "idx": None if mode == 0 else idx}
     result = {"idx": reply.idx}
     if command.layout in ("pwm", "rpm", "door", "lock", "relay"):
         size = 4 if command.layout == "rpm" else 1

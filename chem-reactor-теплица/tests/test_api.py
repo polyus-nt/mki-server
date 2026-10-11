@@ -28,7 +28,7 @@ class ChainPort:
                                         stdout=subprocess.PIPE, text=True) if self.binary else None)
         self.requests = []
         self.pwm = [0, 0]
-        self.mode, self.mode_idx, self.locked, self.level = 0, 255, False, 0
+        self.locked, self.level = False, 0
 
     def quiet(self):
         pass
@@ -50,13 +50,8 @@ class ChainPort:
                 data = (1200 + idx).to_bytes(4, "big") + bytes(4)
             elif cmd in (0x30, 0x32):
                 if cmd == 0x32:
-                    self.pwm[idx] = 230 if self.mode == 2 and idx == self.mode_idx else request.data[0]
+                    self.pwm[idx] = request.data[0]
                 data = bytes([self.pwm[idx]]) + bytes(7)
-            elif cmd in (0x40, 0x41):
-                if cmd == 0x41:
-                    self.mode = request.data[0]
-                    self.mode_idx = idx if self.mode else 255
-                data = bytes([self.mode, self.mode_idx]) + bytes(6)
             elif cmd in (0x42, 0x43):
                 if cmd == 0x42:
                     self.locked = bool(request.data[0])
@@ -96,7 +91,7 @@ class ApiTests(unittest.TestCase):
     def test_all_gets_through_wire_protocol(self):
         with TestClient(create_app(Settings("fake"), ChainPort)) as client:
             paths = console.selftest_paths(client.get("/openapi.json").json())
-            self.assertEqual(len(paths), 20)
+            self.assertEqual(len(paths), 19)
             for path in paths:
                 reply = client.get(path)
                 self.assertEqual(reply.status_code, 200, (path, reply.text))
@@ -108,7 +103,7 @@ class ApiTests(unittest.TestCase):
             self.assertEqual(gas["age_ms"], 123)
             self.assertEqual(client.get("/api/v1/capabilities").json()["greenhouse"], "chemreactor")
 
-    def test_writes_modes_common_lock_and_all_relay_levels(self):
+    def test_writes_direct_pwm_common_lock_and_all_relay_levels(self):
         with TestClient(create_app(Settings("fake"), ChainPort)) as client:
             for idx in range(2):
                 r = client.post(f"/api/v1/fans/{idx}/pwm", json={"pwm": 100})
@@ -123,14 +118,7 @@ class ApiTests(unittest.TestCase):
                 self.assertEqual(r.status_code, 200, r.text)
                 self.assertEqual(r.json()["level"], level)
                 self.assertEqual(client.get("/api/v1/relay-fan/level").json()["level"], level)
-            r = client.post("/api/v1/admin/mode", json={"mode": 2, "idx": 1})
-            self.assertEqual(r.json()["mode"], 2)
-            r = client.post("/api/v1/fans/1/pwm", json={"pwm": 100})
-            self.assertEqual(r.json()["value"], 230)
-            self.assertEqual(client.get("/api/v1/admin/mode").json()["idx"], 1)
-            r = client.post("/api/v1/admin/mode", json={"mode": 0, "idx": 0})
-            self.assertIsNone(r.json()["idx"])
-            self.assertEqual(client.get("/api/v1/fans/1/pwm").json()["value"], 230)
+            self.assertEqual(client.get("/api/v1/fans/1/pwm").json()["value"], 100)
 
     def test_bad_arguments_and_fablab_routes_never_reach_hardware(self):
         app = create_app(Settings("fake"), ChainPort)
@@ -142,13 +130,12 @@ class ApiTests(unittest.TestCase):
             cases = [("/api/v1/fans/0/pwm", {"pwm": v}) for v in (True, "100", 100.5, -1, 256)]
             cases += [("/api/v1/relay-fan/level", {"level": v}) for v in (True, "1", -1, 11)]
             cases += [("/api/v1/admin/lock", {"lock_state": v}) for v in (0, 1, "true")]
-            cases += [("/api/v1/admin/mode", {"mode": 1, "idx": 2}),
-                      ("/api/v1/admin/mode", {"mode": 0, "idx": None}),
-                      ("/api/v1/fans/0/pwm", {"pwm": 100, "extra": 1})]
+            cases += [("/api/v1/fans/0/pwm", {"pwm": 100, "extra": 1})]
             for path, body in cases:
                 self.assertEqual(client.post(path, json=body).status_code, 422, (path, body))
-            for path in ("/api/v1/voc/0", "/api/v1/dust/0", "/api/v1/vacuum/state", "/api/v1/locks/0/state"):
+            for path in ("/api/v1/voc/0", "/api/v1/dust/0", "/api/v1/vacuum/state", "/api/v1/locks/0/state", "/api/v1/admin/mode"):
                 self.assertEqual(client.get(path).status_code, 404)
+            self.assertEqual(client.post("/api/v1/admin/mode", json={"mode": 2, "idx": 0}).status_code, 404)
             self.assertEqual(app.state.service.transport.requests, [])
             self.assertNotIn("securitySchemes", client.get("/openapi.json").json()["components"])
 
@@ -190,8 +177,7 @@ class ApiTests(unittest.TestCase):
                     self.assertEqual(reply.status_code, 200, (path, reply.text))
                 for path, body in (("/api/v1/fans/1/pwm", {"pwm": 100}),
                                    ("/api/v1/admin/lock", {"lock_state": True}),
-                                   ("/api/v1/relay-fan/level", {"level": 10}),
-                                   ("/api/v1/admin/mode", {"mode": 2, "idx": 1})):
+                                   ("/api/v1/relay-fan/level", {"level": 10})):
                     reply = client.post(path, json=body)
                     self.assertEqual(reply.status_code, 200, reply.text)
         finally:
@@ -215,7 +201,7 @@ class ConsoleTests(unittest.TestCase):
         self.assertIn(("/api/v1/admin/lock", {"lock_state": True}), client.calls)
         self.assertIn(("/api/v1/relay-fan/level", {"level": 10}), client.calls)
         count = len(client.calls)
-        for command in ("lock 0", "set_door_lock 0 1", "set_pwm 2 100", "set_relay_level 11", "vacuum", "voc 0"):
+        for command in ("lock 0", "set_door_lock 0 1", "set_pwm 2 100", "set_relay_level 11", "vacuum", "voc 0", "get_mode", "set_mode 2 0"):
             with self.assertRaises(ValueError):
                 console.execute(client, command)
         self.assertEqual(len(client.calls), count)

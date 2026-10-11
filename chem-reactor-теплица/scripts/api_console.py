@@ -29,18 +29,16 @@ COMMANDS = {
     "rpm": ("/api/v1/fans/{idx}/rpm", 2),
     "lock": ("/api/v1/lock/state", None),
     "relay": ("/api/v1/relay-fan/level", None),
-    "mode": ("/api/v1/admin/mode", None),
 }
 ALIASES = {"get_temp": "temp", "get_pressure": "pressure", "get_gas": "gas",
            "get_humidity": "humidity", "get_door_state": "door",
-           "get_pwm": "pwm", "get_rpm": "rpm", "get_mode": "mode",
+           "get_pwm": "pwm", "get_rpm": "rpm",
            "get_relay_level": "relay", "get_door_lock": "lock", "set_pwm": "setpwm",
-           "set_mode": "setmode", "set_door_lock": "setlock", "set_relay_level": "setrelay"}
+           "set_door_lock": "setlock", "set_relay_level": "setrelay"}
 HELP = """health | capabilities | probe
 temp 0..1 | pressure 0..1 | humidity 0..1 | gas 0..1
 door 0..1 | pwm 0..1 | rpm 0..1 | lock | relay
 set_pwm idx pwm — PWM 0..255, переключает вентилятор
-get_mode | set_mode mode idx — mode 0/1/2, idx 0..1 (Admin)
 set_door_lock 0|1 — 1 блокирует оба замка, 0 разблокирует (Admin)
 set_relay_level 0..10 — уровень релейного вентилятора, 0 выключает
 get /api/v1/... — произвольный GET на этом же сервере
@@ -177,7 +175,7 @@ def execute(client, line):
         return True
     if command == "selftest" and len(parts) == 1:
         return selftest(client)
-    if command in ("setpwm", "setmode", "setlock", "setrelay"):
+    if command in ("setpwm", "setlock", "setrelay"):
         required = 2 if command in ("setlock", "setrelay") else 3
         if len(parts) != required:
             raise ValueError("Неверное число аргументов. Введите help.")
@@ -187,11 +185,6 @@ def execute(client, line):
             if not (0 <= idx <= 1 and 0 <= pwm <= 255):
                 raise ValueError("set_pwm: idx 0..1, PWM 0..255")
             path, body = f"/api/v1/fans/{idx}/pwm", {"pwm": pwm}
-        elif command == "setmode":
-            mode, idx = values
-            if not (0 <= mode <= 2 and 0 <= idx <= 1):
-                raise ValueError("set_mode: mode 0..2, idx 0..1")
-            path, body = "/api/v1/admin/mode", {"mode": mode, "idx": idx}
         elif command == "setlock":
             state = values[0]
             if state not in (0, 1):

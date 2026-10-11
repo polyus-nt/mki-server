@@ -24,7 +24,7 @@ COMMANDS = {
     "pressure": ("/api/v1/pressure/{idx}", 3),
     "voc": ("/api/v1/voc/{idx}", 2),
     "humidity": ("/api/v1/humidity/{idx}", 3),
-    "dust": ("/api/v1/dust/{idx}", 2),
+    "dust": ("/api/v1/dust", None),
     "door": ("/api/v1/doors/{idx}/state", 2),
     "pwm": ("/api/v1/fans/{idx}/pwm", 6),
     "rpm": ("/api/v1/fans/{idx}/rpm", 6),
@@ -38,7 +38,7 @@ ALIASES = {"get_temp": "temp", "get_pressure": "pressure", "get_voc": "voc",
            "get_vacuum": "vacuum", "get_door_lock": "lock", "set_pwm": "setpwm",
            "set_mode": "setmode", "set_door_lock": "setlock", "set_vacuum": "setvacuum"}
 HELP = """health | capabilities | probe
-temp 0..2 | pressure 0..2 | voc 0..1 | humidity 0..2 | dust 0..1
+temp 0..2 | pressure 0..2 | voc 0..1 | humidity 0..2 | dust
 door 0..1 | pwm 0..5 | rpm 0..5 | lock 0..1 | vacuum
 set_pwm idx pwm — PWM 0..255, переключает вентилятор
 get_mode | set_mode mode idx — mode 0/1/2, idx 0..5 (Admin)

@@ -53,12 +53,6 @@ class RelayState(BaseModel):
     received_at: datetime
 
 
-class ModeState(BaseModel):
-    mode: int
-    idx: int | None
-    received_at: datetime
-
-
 class Acknowledgement(BaseModel):
     acknowledged: bool
     received_at: datetime
@@ -67,12 +61,6 @@ class Acknowledgement(BaseModel):
 class PwmRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     pwm: StrictInt = Field(ge=0, le=255)
-
-
-class ModeRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    mode: StrictInt = Field(ge=0, le=2)
-    idx: StrictInt = Field(ge=0, le=1)
 
 
 class LockRequest(BaseModel):
@@ -120,7 +108,7 @@ def create_app(settings: Settings | None = None, transport_factory=SerialTranspo
         return {"greenhouse": "chemreactor", "protocol_version": 2,
                 "channels": {name: {"count": item.count, "node": item.node,
                                      "command": f"0x{item.code:02X}"}
-                             for name, item in COMMANDS.items() if name not in ("lock", "relay", "mode")},
+                             for name, item in COMMANDS.items() if name not in ("lock", "relay")},
                 "lock": {"node": 16, "indexed": False, "physical_locks": 2},
                 "relay_fan": {"node": 16, "indexed": False, "levels": [0, 10], "break_ms": 250},
                 "actuator_routes": [{"gateway_node": 14, "global_indices": [0, 1], "local_indices": [0, 1]}],
@@ -177,14 +165,6 @@ def create_app(settings: Settings | None = None, transport_factory=SerialTranspo
     @app.post("/api/v1/relay-fan/level", response_model=RelayState, tags=["fans"])
     async def set_relay_level(body: RelayRequest, request: Request):
         return await request.app.state.service.read(WRITE_COMMANDS["relay"], 0, bytes([body.level]) + bytes(7))
-
-    @app.get("/api/v1/admin/mode", response_model=ModeState, tags=["admin"])
-    async def get_mode(request: Request):
-        return await read(request, "mode", 255)
-
-    @app.post("/api/v1/admin/mode", response_model=ModeState, tags=["admin"])
-    async def set_mode(body: ModeRequest, request: Request):
-        return await request.app.state.service.read(WRITE_COMMANDS["mode"], body.idx, bytes([body.mode]) + bytes(7))
 
     return app
 

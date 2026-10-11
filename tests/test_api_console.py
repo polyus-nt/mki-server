@@ -75,17 +75,18 @@ class ConsoleTests(unittest.TestCase):
         with contextlib.redirect_stdout(output):
             self.assertTrue(console.execute(self.client, "temp 2"))
             self.assertTrue(console.execute(self.client, "vacuum"))
+            self.assertTrue(console.execute(self.client, "dust"))
         self.assertEqual(self.requests, [("/api/v1/temperature/2", None),
-                                         ("/api/v1/vacuum/state", None)])
+                                         ("/api/v1/vacuum/state", None), ("/api/v1/dust", None)])
         self.assertIn('"value": 12', output.getvalue())
-        for command in ("temp 3", "lock -1", "vacuum 0", "pwm", "bogus", "get https://evil.test/"):
+        for command in ("dust 0", "dust 1", "temp 3", "lock -1", "vacuum 0", "pwm", "bogus", "get https://evil.test/"):
             with self.assertRaises(ValueError):
                 console.execute(self.client, command)
-        self.assertEqual(len(self.requests), 2)
+        self.assertEqual(len(self.requests), 3)
 
     def test_selftest_covers_every_get_and_every_index(self):
         paths = console.selftest_paths(self.schema)
-        self.assertEqual(len(paths), 34)
+        self.assertEqual(len(paths), 33)
         expected = []
         for path, count in console.COMMANDS.values():
             expected.extend([path] if count is None else [path.format(idx=i) for i in range(count)])
@@ -99,7 +100,7 @@ class ConsoleTests(unittest.TestCase):
         output = io.StringIO()
         with contextlib.redirect_stdout(output):
             self.assertFalse(console.selftest(self.client))
-        self.assertEqual(len(self.requests), 35)
+        self.assertEqual(len(self.requests), 34)
         self.assertIn("DEVICE_TIMEOUT", output.getvalue())
         self.assertIn("ошибок 1", output.getvalue())
         self.assertEqual(self.requests[-1][0], "/api/v1/admin/mode")

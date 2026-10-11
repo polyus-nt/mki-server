@@ -27,7 +27,6 @@ class Measurement(Reading):
 
 
 class DustMeasurement(BaseModel):
-    idx: int
     adc: int
     voltage_mv: int
     voltage_v: float
@@ -123,14 +122,14 @@ def create_app(settings: Settings | None = None, transport_factory=SerialTranspo
     async def capabilities():
         return {"greenhouse": "fablab", "protocol_version": 2, "access": "user-and-admin",
                 "channels": {name: {"count": item.count, "node": item.node,
-                                    "command": f"0x{item.code:02X}"} for name, item in COMMANDS.items() if name not in ("vacuum", "mode")},
+                                    "indexed": name != "dust", "command": f"0x{item.code:02X}"} for name, item in COMMANDS.items() if name not in ("vacuum", "mode")},
                 "vacuum": {"node": 16, "command": "0x52", "indexed": False},
                 "actuator_routes": [
                     {"gateway_node": 14, "global_indices": [0, 1, 2, 3], "local_indices": [0, 1, 2, 3]},
                     {"gateway_node": 17, "global_indices": [4, 5], "local_indices": [0, 1]},
                 ],
                 "admin_enabled": True, "authentication": "none",
-                "chemreactor": "not_implemented"}
+                "chemreactor": "separate-service"}
 
     @app.get("/api/v1/hub/probe", tags=["hub"])
     async def probe(request: Request):
@@ -153,9 +152,9 @@ def create_app(settings: Settings | None = None, transport_factory=SerialTranspo
     async def humidity(idx: Index3, request: Request):
         return await read(request, "humidity", idx)
 
-    @app.get("/api/v1/dust/{idx}", response_model=DustMeasurement, tags=["sensors"])
-    async def dust(idx: Index2, request: Request):
-        return await read(request, "dust", idx)
+    @app.get("/api/v1/dust", response_model=DustMeasurement, tags=["sensors"])
+    async def dust(request: Request):
+        return await read(request, "dust", 0)
 
     @app.get("/api/v1/doors/{idx}/state", response_model=DoorState, tags=["doors"])
     async def door(idx: Index2, request: Request):

@@ -19,7 +19,7 @@ COMMANDS = {
     "voc": Command("get_voc", 0x21, 13, 2, "voc"),
     "pressure": Command("get_pressure", 0x23, 13, 3, "pressure"),
     "humidity": Command("get_humidity", 0x24, 13, 3, "humidity"),
-    "dust": Command("get_dust", 0x25, 13, 2, "dust"),
+    "dust": Command("get_dust", 0x25, 13, 1, "dust"),
     # Компьютер использует node14 и глобальные idx0..5. Хаб сам переводит
     # idx4/5 в node17 idx0/1 и восстанавливает исходные поля ответа.
     "pwm": Command("get_pwm", 0x30, 14, 6, "pwm"),
@@ -180,6 +180,7 @@ def decode_result(command: Command, reply: Frame) -> dict:
         value, unit = value / 100, "%RH"
     elif command.layout == "dust" and int.from_bytes(data[:2], "big") <= 1023:
         mv = int.from_bytes(data[2:4], "big")
+        result.pop("idx")  # Единственный датчик пыли: внешний API без индекса.
         return {**result, "adc": int.from_bytes(data[:2], "big"), "voltage_mv": mv, "voltage_v": mv / 1000}
     else:
         raise ValueError("Invalid measurement value/layout")

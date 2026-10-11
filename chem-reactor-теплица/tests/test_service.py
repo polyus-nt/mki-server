@@ -69,9 +69,9 @@ class ServiceTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_read_and_write_share_fifo_and_payload_is_preserved(self):
         service = await self.start_service()
-        jobs = [(COMMANDS["rpm"], 5, bytes(8)),
-                (WRITE_COMMANDS["pwm"], 5, b"\xff" + bytes(7)),
-                (WRITE_COMMANDS["mode"], 4, b"\x02" + bytes(7)),
+        jobs = [(COMMANDS["rpm"], 1, bytes(8)),
+                (WRITE_COMMANDS["pwm"], 1, b"\xff" + bytes(7)),
+                (WRITE_COMMANDS["lock"], 0, b"\x01" + bytes(7)),
                 (WRITE_COMMANDS["relay"], 0, b"\x01" + bytes(7)),
                 (COMMANDS["pwm"], 0, bytes(8))]
         await asyncio.gather(*(service.read(*job) for job in jobs))

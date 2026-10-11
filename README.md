@@ -72,7 +72,7 @@ api> temp 0
 api> pressure 2
 api> voc 1
 api> humidity 0
-api> dust 1
+api> dust
 api> door 0
 api> pwm 3
 api> rpm 3
@@ -125,7 +125,7 @@ HTTP-таймаут по умолчанию 45 с включает ожидан�
 | `/pressure/{idx}` | 0..2 | давление BMP280, Па |
 | `/voc/{idx}` | 0..1 | VOC Index SGP40, не ppm |
 | `/humidity/{idx}` | 0..2 | влажность DHT11, % RH |
-| `/dust/{idx}` | 0..1 | ADC и напряжение GP2Y1010AU0F, не концентрация |
+| `/dust` | без индекса | ADC и напряжение GP2Y1010AU0F, не концентрация |
 | `/doors/{idx}/state` | 0..1 | `closed`, концевики кнопочницы |
 | `/fans/{idx}/pwm` | 0..5 | применённый PWM 0..255 на Arduino |
 | `/fans/{idx}/rpm` | 0..5 | измеренные RPM на Arduino |
@@ -256,3 +256,16 @@ CRC/resync/session wrap и 44 ранее согласованных wire-век�
 
 Lifespan соответствует [рекомендованному механизму FastAPI](https://fastapi.tiangolo.com/advanced/events/);
 serial I/O использует [pySerial API](https://pyserial.readthedocs.io/en/latest/pyserial_api.html).
+
+## Проверка по частям и полного стенда
+
+[Пошаговый гайд диагностики](docs/TESTING.md) — Arduino USB TEST,
+отдельные аппаратные ветви, хаб, FastAPI, безопасные ручные проверки и автотесты.
+
+## Графики датчиков на Rust
+
+Отдельные оконные программы, только чтение через HTTP:
+[ФабЛаб](sensor-plots/README.md) и
+[химреактор](chem-reactor-теплица/sensor-plots/README.md).
+Из нужной папки: `cargo run --release --locked`. Сначала запустите FastAPI.
+COM-порт открывает только сервис, не графики.

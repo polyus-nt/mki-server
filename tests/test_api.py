@@ -84,7 +84,7 @@ class ApiTests(unittest.TestCase):
         app = create_app(Settings("test"), FakeTransport)
         expected = (("temperature/0", "value", -12.34), ("pressure/0", "value", 100653),
                     ("voc/1", "value", 100), ("humidity/2", "value", 55.5),
-                    ("dust/0", "voltage_mv", 2502), ("doors/1/state", "closed", True),
+                    ("dust", "voltage_mv", 2502), ("doors/1/state", "closed", True),
                     ("fans/0/pwm", "value", 230), ("fans/5/rpm", "value", 70000),
                     ("locks/0/state", "lock_output_enabled", False), ("locks/1/state", "lock_output_enabled", False),
                     ("vacuum/state", "enabled", False))
@@ -97,6 +97,11 @@ class ApiTests(unittest.TestCase):
                 self.assertIn("received_at", response.json())
             self.assertFalse(client.get("/api/v1/pressure/0").json()["fresh"])
             self.assertNotIn("idx", client.get("/api/v1/vacuum/state").json())
+            self.assertNotIn("idx", client.get("/api/v1/dust").json())
+            dust = client.get("/api/v1/capabilities").json()["channels"]["dust"]
+            self.assertEqual(dust["count"], 1)
+            self.assertFalse(dust["indexed"])
+            self.assertEqual(app.state.service.transport.calls[-1], (13, 0x25, 0))
             self.assertTrue(client.get("/api/v1/hub/probe").json()["responding"])
             self.assertEqual(client.get("/api/v1/capabilities").json()["channels"]["door"]["node"], 15)
             self.assertIn((15, 0x22, 1), app.state.service.transport.calls)
@@ -109,9 +114,11 @@ class ApiTests(unittest.TestCase):
     def test_invalid_indices_never_reach_port_and_only_declared_write_methods(self):
         app = create_app(Settings("test"), FakeTransport)
         with TestClient(app) as client:
-            for path in ("temperature/-1", "pressure/3", "humidity/3", "voc/2", "dust/2",
+            for path in ("temperature/-1", "pressure/3", "humidity/3", "voc/2",
                          "doors/2/state", "locks/2/state", "fans/6/pwm", "fans/0.1/rpm", "pressure/x"):
                 self.assertEqual(client.get("/api/v1/" + path).status_code, 422, path)
+            for path in ("dust/0", "dust/1", "dust/2"):
+                self.assertEqual(client.get("/api/v1/" + path).status_code, 404)
             self.assertEqual(app.state.service.transport.calls, [])
             self.assertEqual(client.post("/api/v1/fans/6/pwm", json={"pwm": 100}).status_code, 422)
             self.assertEqual(client.post("/api/v1/mode", json={"mode": 1}).status_code, 404)

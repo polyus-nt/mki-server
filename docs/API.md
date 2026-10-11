@@ -58,7 +58,7 @@ py -3 -m venv .venv
 | `get_pressure(idx)` | GET `/api/v1/pressure/{idx}` | `0..2` | Давление BMP280 |
 | `get_voc(idx)` | GET `/api/v1/voc/{idx}` | `0..1` | VOC Index SGP40 |
 | `get_humidity(idx)` | GET `/api/v1/humidity/{idx}` | `0..2` | Влажность DHT11 |
-| `get_dust(idx)` | GET `/api/v1/dust/{idx}` | `0..1` | ADC и напряжение датчика пыли |
+| `get_dust()` | GET `/api/v1/dust` | Без индекса | ADC и напряжение датчика пыли |
 | `get_door_state(idx)` | GET `/api/v1/doors/{idx}/state` | `0..1` | Состояние концевика двери |
 | `get_pwm(idx)` | GET `/api/v1/fans/{idx}/pwm` | `0..5` | Применённый PWM |
 | `get_rpm(idx)` | GET `/api/v1/fans/{idx}/rpm` | `0..5` | Измеренная скорость вентилятора |
@@ -135,11 +135,11 @@ TEST-консоль: чтение одним клиентом может сбр�
 
 ### Пыль: GP2Y1010AU0F
 
-`GET /api/v1/dust/0`:
+Единственный GP2Y1010AU0F: сигнал A1, LED A2.
+`GET /api/v1/dust` (без индекса в адресе и JSON):
 
 ```json
 {
-  "idx": 0,
   "adc": 205,
   "voltage_mv": 1002,
   "voltage_v": 1.002,
@@ -484,7 +484,7 @@ temp 0
 pressure 2
 voc 1
 humidity 0
-dust 1
+dust
 door 0
 pwm 4
 rpm 4

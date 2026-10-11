@@ -6,7 +6,7 @@
 | --- | --- |
 | tjc-commutator | FastAPI, Python-кодек, FIFO, serial, HTTP-консоль и тесты сервиса |
 | arduino-sensor | BMP280/DHT11/MQ2, GPIO-адаптеры, SensorApi, Austere, тесты датчиков |
-| arduino-actuator | PWM/RPM/режимы, GPIO/реле, ActuatorApi, Austere, тесты вентиляторов |
+| arduino-actuator | PWM/RPM, GPIO/реле, ActuatorApi, Austere, тесты вентиляторов |
 | tjc-sketch | МС-ТЮК-хаб/шлюзы/кнопочница/lmp8, runtime, ARM-билдеры, сквозной C++-тест |
 
 Код адаптирован из фаблаб-проектов, но рабочие фаблаб-прошивки не меняются.

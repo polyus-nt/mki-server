@@ -50,7 +50,6 @@ pwm 1
 rpm 1
 lock
 relay
-get_mode
 selftest
 ```
 
@@ -62,8 +61,6 @@ set_relay_level 7
 set_relay_level 0
 set_door_lock 1
 set_door_lock 0
-set_mode 2 1
-set_mode 0 1
 ```
 
 Замок без индекса: set_door_lock 1 блокирует оба. Selftest — 20 GET + OpenAPI,
@@ -102,3 +99,12 @@ Remove-Item Env:CHEM_FIRMWARE_CHAIN
 Без переменной используется самостоятельная wire-модель. С переменной —
 реальные C++ API хаба/шлюза/конечных плат, с подменёнными GPIO.
 PTY-проверка HTTP → pySerial → SimpleBus выполняется только на POSIX.
+
+## Проверка по частям и полного стенда
+
+[Пошаговый гайд диагностики](../docs/TESTING.md) — Arduino USB TEST,
+отдельные аппаратные ветви, хаб, FastAPI, безопасные ручные проверки и автотесты.
+
+Режимов отказа вентиляторов здесь нет: PWM применяется без случайной подмены.
+[Оконные графики датчиков на Rust](sensor-plots/README.md):
+`cargo run --release --locked` из sensor-plots/, после запуска FastAPI.
