@@ -1,7 +1,7 @@
 # Транспорт сервиса: Hardware API v2
 
 9600, 8N1, без flow control. Компьютер 99 (`63`), хаб 12 (`0C`),
-sensors-шлюз 13, actuator-1 шлюз 14, кнопочница 15, lmp8 16, actuator-2 шлюз 17.
+sensors-шлюз 13, actuator-1 шлюз 14, кнопочница 15, обычная lmp 16, actuator-2 шлюз 17.
 Хаб/шлюзы — SimpleBus, шлюз/Arduino — AustereMaster. Сервис не общается с Arduino USB.
 
 Один полезный байт: `CR | два ASCII HEX адреса | byte | LF`.
