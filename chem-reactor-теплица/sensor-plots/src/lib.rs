@@ -1,4 +1,5 @@
 //! Модель ответа и ограниченная история: не зависит от графического окружения.
+pub mod commands;
 use serde::Deserialize;
 use std::collections::VecDeque;
 

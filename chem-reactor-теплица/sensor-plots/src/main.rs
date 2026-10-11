@@ -120,6 +120,7 @@ struct App {
     stop: Arc<AtomicBool>,
     url: String,
     max_age_ms: u32,
+    console: chem_sensor_plots::commands::gui::Console,
 }
 impl App {
     fn new(o: Options, ctx: egui::Context) -> Self {
@@ -138,6 +139,7 @@ impl App {
                 last_sample: None,
             })
             .collect();
+        let (console, commands) = chem_sensor_plots::commands::gui::console(ctx.clone());
         let (tx, events) = mpsc::sync_channel(64);
         let stop = Arc::new(AtomicBool::new(false));
         let worker_stop = stop.clone();
@@ -148,6 +150,7 @@ impl App {
                 .timeout(o.timeout)
                 .connect_timeout(Duration::from_secs(5))
                 .redirect(reqwest::redirect::Policy::none())
+                .retry(reqwest::retry::never())
                 .build()
             {
                 Ok(client) => client,
@@ -165,6 +168,10 @@ impl App {
             while !worker_stop.load(Ordering::Relaxed) {
                 // Один последовательный цикл: не забиваем FIFO сервера параллельными запросами.
                 for (index, channel) in worker_channels.iter().enumerate() {
+                    if worker_stop.load(Ordering::Relaxed) {
+                        return;
+                    }
+                    commands.process_pending(&client, &worker_url);
                     if worker_stop.load(Ordering::Relaxed) {
                         return;
                     }
@@ -206,6 +213,7 @@ impl App {
                 }
                 let until = Instant::now() + o.interval;
                 while Instant::now() < until && !worker_stop.load(Ordering::Relaxed) {
+                    commands.process_pending(&client, &worker_url);
                     thread::sleep(Duration::from_millis(50));
                 }
             }
@@ -217,6 +225,7 @@ impl App {
             stop,
             url: o.url,
             max_age_ms: o.max_age_ms,
+            console,
         }
     }
 }
@@ -262,10 +271,13 @@ impl eframe::App for App {
         egui::TopBottomPanel::top("header").show(ctx, |ui| {
             ui.heading(TITLE);
             ui.label(format!(
-                "GET only · {} · время X: секунды после запуска",
+                "FastAPI · {} · время X: секунды после запуска",
                 self.url
             ));
             ui.label("Колесо — масштаб; перетаскивание — панорама; двойной щелчок — автоподбор.");
+        });
+        egui::TopBottomPanel::bottom("command_panel").show(ctx, |ui| {
+            self.console.show(ui);
         });
         egui::CentralPanel::default().show(ctx, |ui| {
             egui::ScrollArea::vertical().show(ui, |ui| {

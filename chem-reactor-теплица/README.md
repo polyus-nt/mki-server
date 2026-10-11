@@ -108,3 +108,6 @@ PTY-проверка HTTP → pySerial → SimpleBus выполняется то
 Режимов отказа вентиляторов здесь нет: PWM применяется без случайной подмены.
 [Оконные графики датчиков на Rust](sensor-plots/README.md):
 `cargo run --release --locked` из sensor-plots/, после запуска FastAPI.
+В окне есть панель ручных команд: `set_pwm 0 128`, `set_door_lock 1`,
+`set_relay_level 4`. Команды реально переключают оборудование;
+`set_door_lock` управляет общим выходом двух замков без индекса.
