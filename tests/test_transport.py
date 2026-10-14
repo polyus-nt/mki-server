@@ -19,96 +19,150 @@ class SerialFake:
     def __init__(self, **kwargs):
         self.options = kwargs
         self.wire = bytearray()
-        self.requests = []
+        self.incoming = bytearray()
+        self.requests, self.claims = [], []
         self.closed = False
+        self.counter = 0
+        self.resets = 0
 
     def write(self, data):
-        # Проверяем работу при частичной записи.
-        self.wire.extend(data[:2])
-        return min(2, len(data))
+        written = min(2,len(data))
+        self.wire.extend(data[:written])
+        if len(self.wire) == 140:
+            frame = Frame.decode(bytes(self.wire[3::5]))
+            self.wire.clear()
+            if frame.command == 0xf1:
+                self.claims.append(frame)
+                self.incoming.extend(self.encode(replace(frame, kind=2, command=0xf2,
+                                        session_id=frame.session_id ^ int.from_bytes(frame.data,"big"), data=b"\x00\x64" + bytes(6))))
+            else:
+                self.requests.append(frame)
+                payload = (100653).to_bytes(4, "big") + bytes.fromhex("03 00 00 00")
+                response = replace(frame, kind=2, data=payload)
+                stale = replace(response, session_id=frame.session_id ^ 1)
+                invalid = replace(response, data=bytes(8))
+                bad = bytearray(response.encode()); bad[-1] ^= 1
+                self.incoming.extend(self.encode(stale) + self.encode(invalid) +
+                    b"".join(envelope(b,99) for b in bad) + self.encode(response))
+        return written
+
+    @staticmethod
+    def encode(frame):
+        return b"".join(envelope(b,99) for b in frame.encode())
 
     @property
-    def out_waiting(self):
-        return 0
+    def in_waiting(self):
+        return len(self.incoming)
+
+    def reset_input_buffer(self):
+        self.incoming.clear(); self.resets += 1
 
     def read(self, size):
-        request = Frame.decode(bytes(self.wire[3::5])); self.requests.append(request)
-        self.wire.clear()
-        data = (100653).to_bytes(4, "big") + bytes.fromhex("03 00 00 00")
-        response = replace(request, kind=2, data=data)
-        stale = replace(response, session_id=request.session_id ^ 1)
-        invalid = replace(response, data=bytes(8))
-        bad = bytearray(response.encode()); bad[-1] ^= 1
-        return b"".join(envelope(b, 99) for b in stale.encode() + invalid.encode() + bytes(bad) + response.encode())
+        if not size:
+            return b""
+        if not self.incoming:
+            self.counter += 1
+            frame = Frame(self.counter & 65535, 12, 0xf0, 0,
+                          123 ^ (self.counter >> 16), kind=2,
+                          data=b"\x00\x64" + bytes(6))
+            self.incoming.extend(self.encode(frame))
+        result = bytes(self.incoming[:size]); del self.incoming[:size]
+        return result
 
     def close(self):
         self.closed = True
 
 
 class TransportTests(unittest.TestCase):
-    def test_serial_config_pacing_partial_writes_and_session_rollover(self):
+    def test_serial_config_handshake_partial_writes_and_ticket_rollover(self):
         with patch("hub_service.transport.serial.Serial", SerialFake):
             port = SerialTransport(Settings("COM15"))
-        self.assertEqual(port.port.options["baudrate"], 9600)
+        self.assertEqual(port.port.options["baudrate"], 115200)
         self.assertFalse(port.port.options["rtscts"])
         self.assertFalse(port.port.options["xonxoff"])
-        port.quiet = unittest.mock.Mock()
-        port.tx_id, port.session = 65535, (1 << 64) - 1
+        port.port.counter = 65534
+        port.session = 456
+        start = time.monotonic()
         first = port.exchange(COMMANDS["pressure"], 0)
         second = port.exchange(COMMANDS["pressure"], 1)
+        self.assertLess(time.monotonic()-start, .2)
         self.assertEqual(first["value"], 100653)
         self.assertEqual(second["idx"], 1)
-        self.assertEqual([(r.tx_id, r.session_id) for r in port.port.requests], [(65535, (1 << 64)-1), (1, 1)])
-        self.assertEqual(port.quiet.call_count, 2)
+        self.assertEqual([(r.tx_id, r.session_id) for r in port.port.requests],
+                         [(65535, 123 ^ 456), (0, 122 ^ 456)])
+        self.assertEqual(len(port.port.claims), 2)
+        self.assertEqual(port.port.resets, 1)
         port.close(); self.assertTrue(port.port.closed)
 
-    def test_quiet_has_bounded_noise_recovery(self):
+    def test_buffer_reset_is_immediate(self):
         with patch("hub_service.transport.serial.Serial", SerialFake):
             port = SerialTransport(Settings("test"))
-        now = [0.0]
-        def noisy(timeout):
-            now[0] += .1
-            return b"noise"
-        port.read = noisy
-        with patch("hub_service.transport.time.monotonic", side_effect=lambda: now[0]):
-            with self.assertRaisesRegex(OSError, "3 с"):
-                port.quiet()
-
-    def test_quiet_can_finish_between_autonomous_polls(self):
-        with patch("hub_service.transport.serial.Serial", SerialFake):
-            port = SerialTransport(Settings("test"))
-        now = [0.0]
-        def polling(timeout):
-            now[0] += timeout
-            return b"background traffic" if now[0] <= .4 else b""
-        port.read = polling
-        with patch("hub_service.transport.time.monotonic", side_effect=lambda: now[0]):
+        port.port.incoming.extend(b"old READY/late response")
+        with patch("hub_service.transport.time.sleep", side_effect=AssertionError("no sleeps")):
             port.quiet()
-        # Последний байт ~0.4, тишина 1 с закончилась до следующего опроса.
-        self.assertGreaterEqual(now[0], 1.35)
-        self.assertLess(now[0], 1.9)
+        self.assertFalse(port.port.incoming)
 
-    def test_raw_silence_is_host_timeout(self):
+    def test_raw_silence_never_sends_a_command(self):
         with patch("hub_service.transport.serial.Serial", SerialFake):
             port = SerialTransport(Settings("test", exchange_timeout=.01))
-        port.quiet = lambda: None
-        port.send = lambda packet, deadline: None
         port.read = lambda timeout: b""
         with self.assertRaises(HubError) as error:
             port.exchange(COMMANDS["pressure"], 0)
         self.assertEqual(error.exception.code, "HOST_TIMEOUT")
-        self.assertEqual(error.exception.details["rx_bytes"], 0)
+        self.assertFalse(error.exception.details["command_sent"])
+        self.assertFalse(port.port.requests)
+
+    def test_missing_grant_never_sends_set(self):
+        with patch("hub_service.transport.serial.Serial", SerialFake):
+            port = SerialTransport(Settings("test", exchange_timeout=.01))
+        original = port.send_frame
+        def lose_claim(frame, deadline):
+            if frame.command != 0xf1:
+                original(frame, deadline)
+        port.send_frame = lose_claim
+        from hub_service.protocol import WRITE_COMMANDS
+        with self.assertRaises(HubError) as error:
+            port.exchange(WRITE_COMMANDS["pwm"], 0, b"\x64"+bytes(7))
+        self.assertFalse(error.exception.details["command_sent"])
+        self.assertFalse(port.port.requests)
+
+    @unittest.skipUnless(os.name == "posix", "PTY requires POSIX")
+    def test_lost_set_reply_never_resends_action(self):
+        with patch("hub_service.transport.serial.Serial", SerialFake):
+            port=SerialTransport(Settings("test",exchange_timeout=.02))
+        write=port.port.write
+        def lose_reply(data):
+            count=write(data)
+            if port.port.requests:
+                port.port.incoming.clear()
+            return count
+        port.port.write=lose_reply
+        from hub_service.protocol import WRITE_COMMANDS
+        with self.assertRaises(HubError) as error:
+            port.exchange(WRITE_COMMANDS["pwm"],0,b"\x64"+bytes(7))
+        self.assertTrue(error.exception.details["command_sent"])
+        self.assertEqual(len(port.port.requests),1)
+        self.assertEqual(port.port.requests[0].command,0x32)
 
     @unittest.skipUnless(os.name == "posix", "PTY requires POSIX")
     def test_http_to_real_pyserial_pty_and_back(self):
         master, slave = os.openpty()
+        import tty
+        tty.setraw(slave)  # Не эхоить ранний READY до открытия pyserial.
         stop = threading.Event()
         errors, requests = [], []
 
         def hardware():
             try:
                 window, frame = bytearray(), bytearray()
+                last_ready = 0.0; counter = 0
                 while not stop.is_set():
+                    if time.monotonic()-last_ready > .03:
+                        counter += 1
+                        ready = Frame(counter & 65535, 12, 0xf0, 0, 123 ^ (counter >> 16),
+                                      kind=2, data=b"\x00\x64"+bytes(6))
+                        os.write(master,b"".join(envelope(b,99) for b in ready.encode()))
+                        last_ready = time.monotonic()
                     if not select.select([master], [], [], .05)[0]:
                         continue
                     for byte in os.read(master, 1024):
@@ -121,7 +175,14 @@ class TransportTests(unittest.TestCase):
                         frame.append(window[3]); window.clear()
                         if len(frame) != 28:
                             continue
-                        request = Frame.decode(bytes(frame)); frame.clear(); requests.append(request)
+                        request = Frame.decode(bytes(frame)); frame.clear()
+                        if request.command == 0xf1:
+                            grant = replace(request,kind=2,command=0xf2,
+                                            session_id=request.session_id ^ int.from_bytes(request.data,"big"), data=b"\x00\x64"+bytes(6))
+                            os.write(master,b"".join(envelope(b,99) for b in grant.encode()))
+                            last_ready=time.monotonic()
+                            continue
+                        requests.append(request)
                         if request.command == 0x20 and request.idx == 3:
                             response = replace(request, kind=2, status=1)
                         elif request.command == 0x22:
@@ -183,7 +244,7 @@ class TransportTests(unittest.TestCase):
                     self.assertTrue(result.json()["acknowledged"])
             self.assertEqual(len(requests), 20)
             self.assertEqual(len({r.session_id for r in requests}), 1)
-            self.assertEqual([r.tx_id for r in requests], list(range(1, 21)))
+            self.assertEqual(len({(r.tx_id,r.session_id) for r in requests}),20)
         finally:
             stop.set(); thread.join(1); os.close(master); os.close(slave)
         self.assertFalse(errors, errors)

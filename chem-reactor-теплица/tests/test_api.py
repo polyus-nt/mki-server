@@ -145,6 +145,8 @@ class ApiTests(unittest.TestCase):
     @unittest.skipUnless(os.name == "posix", "PTY requires POSIX")
     def test_http_pyserial_simplebus_chain_and_back(self):
         master, slave = os.openpty()
+        import tty
+        tty.setraw(slave)  # Не эхоить ранний READY до открытия pyserial.
         port = ChainPort(Settings("fake"))
         stop = threading.Event()
         failures = []
@@ -152,7 +154,14 @@ class ApiTests(unittest.TestCase):
         def device():
             try:
                 window, frame = bytearray(), bytearray()
+                last_ready=0.0; counter=0
                 while not stop.is_set():
+                    if time.monotonic()-last_ready>.03:
+                        counter+=1
+                        ready=Frame(counter&65535,12,0xf0,0,123^(counter>>16),
+                                    kind=2,data=b"\x00\x64"+bytes(6))
+                        os.write(master,b"".join(envelope(b,99) for b in ready.encode()))
+                        last_ready=time.monotonic()
                     if not select.select([master], [], [], .05)[0]:
                         continue
                     for byte in os.read(master, 1024):
@@ -165,7 +174,15 @@ class ApiTests(unittest.TestCase):
                         self.assertEqual(window[1:3], b"0C")
                         frame.append(window[3]); window.clear()
                         if len(frame) == 28:
-                            reply = port.packet(bytes(frame)); frame.clear()
+                            request=Frame.decode(bytes(frame)); frame.clear()
+                            if request.command==0xf1:
+                                grant=replace(request,kind=2,command=0xf2,
+                                              session_id=request.session_id^int.from_bytes(request.data,"big"),
+                                              data=b"\x00\x64"+bytes(6))
+                                os.write(master,b"".join(envelope(b,99) for b in grant.encode()))
+                                last_ready=time.monotonic()
+                                continue
+                            reply = port.packet(request.encode())
                             wire = b"".join(envelope(b, 99) for b in reply.encode())
                             os.write(master, wire[:7]); time.sleep(.005); os.write(master, wire[7:])
             except BaseException as error:
