@@ -11,6 +11,7 @@ from .protocol import COMMANDS, PROBE, WRITE_COMMANDS
 from .service import HubService
 from .settings import Settings
 from .transport import SerialTransport
+from .reactor import router as reactor_router
 
 
 class Reading(BaseModel):
@@ -90,6 +91,7 @@ def create_app(settings: Settings | None = None, transport_factory=SerialTranspo
 
     app = FastAPI(title="МС-ТЮК: теплица-химреактор", version="0.1.0", lifespan=lifespan,
                   description="Отдельный chemreactor API. Одна FIFO, без авторизации.")
+    app.include_router(reactor_router)
 
     @app.exception_handler(HubError)
     async def hub_error_handler(request, error):
@@ -112,6 +114,8 @@ def create_app(settings: Settings | None = None, transport_factory=SerialTranspo
                 "lock": {"node": 16, "indexed": False, "physical_locks": 2},
                 "relay_fan": {"node": 16, "indexed": False, "levels": [0, 10], "break_ms": 250},
                 "actuator_routes": [{"gateway_node": 14, "global_indices": [0, 1], "local_indices": [0, 1]}],
+                "reactor": {"node": 17, "motors": 3, "stm32": 3, "temperature": 1,
+                            "motor_feedback": False, "max_sps": 7000},
                 "admin_enabled": True, "authentication": "none"}
 
     @app.get("/api/v1/hub/probe", tags=["hub"])

@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 from hub_service.app import create_app
 from hub_service.protocol import Frame, decode_result, envelope
 from hub_service.settings import Settings
+from reactor_model import ReactorModel
 
 ROOT = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location("chem_console", ROOT / "scripts/api_console.py")
@@ -27,6 +28,10 @@ class ChainPort:
         self.process = (subprocess.Popen([str(self.binary), "--bridge"], stdin=subprocess.PIPE,
                                         stdout=subprocess.PIPE, text=True) if self.binary else None)
         self.requests = []
+        reactor_binary=os.environ.get("CHEM_REACTOR_CHAIN")
+        self.reactor_process=(subprocess.Popen([reactor_binary,"--reactor-bridge"],stdin=subprocess.PIPE,
+                              stdout=subprocess.PIPE,text=True) if reactor_binary else None)
+        self.reactor=ReactorModel()
         self.pwm = [0, 0]
         self.locked, self.level = True, 0
 
@@ -34,6 +39,13 @@ class ChainPort:
         pass
 
     def packet(self, packet):
+        request=Frame.decode(packet)
+        if request.node==17:
+            if self.reactor_process:
+                self.reactor_process.stdin.write(packet.hex()+"\n")
+                self.reactor_process.stdin.flush()
+                return Frame.decode(bytes.fromhex(self.reactor_process.stdout.readline()))
+            return self.reactor.packet(request)
         if self.process is None:
             request = Frame.decode(packet)
             cmd, idx = request.command, request.idx
@@ -79,6 +91,10 @@ class ChainPort:
         return decode_result(command, reply)
 
     def close(self):
+        if self.reactor_process:
+            self.reactor_process.stdin.close()
+            self.reactor_process.wait(timeout=2)
+            self.reactor_process.stdout.close()
         if self.process is None:
             return
         if self.process.stdin:
@@ -94,7 +110,7 @@ class ApiTests(unittest.TestCase):
             self.assertTrue(client.get("/api/v1/doors/0/state").json()["closed"])
             self.assertFalse(client.get("/api/v1/doors/1/state").json()["closed"])
             paths = console.selftest_paths(client.get("/openapi.json").json())
-            self.assertEqual(len(paths), 19)
+            self.assertEqual(len(paths), 35)
             for path in paths:
                 reply = client.get(path)
                 self.assertEqual(reply.status_code, 200, (path, reply.text))
@@ -129,7 +145,7 @@ class ApiTests(unittest.TestCase):
             paths = console.selftest_paths(client.get("/openapi.json").json())
             for path in paths:
                 if "/0" in path:
-                    self.assertEqual(client.get(path.replace("/0", "/2")).status_code, 422)
+                    self.assertEqual(client.get(path.replace("/0", "/3" if "/reactor/" in path else "/2")).status_code, 422)
             cases = [("/api/v1/fans/0/pwm", {"pwm": v}) for v in (True, "100", 100.5, -1, 256)]
             cases += [("/api/v1/relay-fan/level", {"level": v}) for v in (True, "1", -1, 11)]
             cases += [("/api/v1/admin/lock", {"lock_state": v}) for v in (0, 1, "true")]

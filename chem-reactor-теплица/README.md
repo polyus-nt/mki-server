@@ -1,5 +1,13 @@
 # Теплица-химреактор: FastAPI и HTTP-консоль
 
+## Mega химического реактора
+
+Встроена через отдельный Arduino-шлюз **17**: три шаговых двигателя (SPS/RPM,
+stop, удержание, микрошаги, состояние), три STM32 (SET/GET U/I и уставки),
+общий DS18B20. [Полное API и команды консоли](REACTOR-API.md).
+Новые методы: `/api/v1/reactor/...`. Rust-приложение не менялось.
+Ветка `feat/chemical-reactor-integration` в arduino-actuator, tjc-sketch и tjc-commutator.
+
 > Общая шина теперь **115200, 8N1**, с READY → CLAIM → GRANT, без секундных пауз.
 > Обновить все платы МС-ТЮК и сервис вместе. Arduino TEST Serial остаётся 9600.
 
@@ -66,7 +74,7 @@ set_door_lock 1
 set_door_lock 0
 ```
 
-Замок без индекса: set_door_lock 1 блокирует оба. Selftest — 20 GET + OpenAPI,
+Замок без индекса: set_door_lock 1 блокирует оба. Selftest — 35 GET + OpenAPI,
 без переключения выходов. Разовый запуск: `--command selftest`.
 Адрес меняется через --url, HTTP-таймаут по умолчанию 45 с.
 

@@ -3,6 +3,7 @@ import argparse
 from http.client import HTTPException
 import json
 import math
+from decimal import Decimal, InvalidOperation
 import shlex
 import time
 from urllib.error import HTTPError, URLError
@@ -29,6 +30,8 @@ COMMANDS = {
     "rpm": ("/api/v1/fans/{idx}/rpm", 2),
     "lock": ("/api/v1/lock/state", None),
     "relay": ("/api/v1/relay-fan/level", None),
+    "reactor_temp": ("/api/v1/reactor/temperature", None),
+    "motor": ("/api/v1/reactor/motors/{idx}/state", 3),
 }
 ALIASES = {"get_temp": "temp", "get_pressure": "pressure", "get_gas": "gas",
            "get_humidity": "humidity", "get_door_state": "door",
@@ -43,6 +46,12 @@ set_door_lock 0|1 — 1 блокирует оба замка, 0 разблоки
 set_relay_level 0..10 — уровень релейного вентилятора, 0 выключает
 get /api/v1/... — произвольный GET на этом же сервере
 selftest — последовательно все GET API и все допустимые индексы
+reactor_temp | motor 0..2
+motor_sps idx скорость | motor_rpm idx обороты — число со знаком, до 3 знаков после точки
+motor_stop [idx] — остановить один мотор или все три
+motor_enable idx 0|1 | motor_micro idx 1/4|1/8|1/16|1/32
+stm idx get_u|get_i|get_setted_u|get_setted_i
+stm idx set_u мВ | stm idx set_i мА — idx 0..2
 help | exit
 Selftest только читает; управляющие команды действительно переключают выходы.
 User/Admin — группы методов без авторизации."""
@@ -164,12 +173,58 @@ def selftest(client):
     return not failures
 
 
+def reactor_command(parts):
+    """Не смешиваем RPM вентиляторов и уставку скорости шаговых моторов."""
+    command=parts[0].lower()
+    root="/api/v1/reactor"
+    if command=="motor_stop" and len(parts)==1:
+        return root+"/motors/stop", {}
+    if len(parts)<2:
+        raise ValueError("Нужен индекс 0..2")
+    idx=int(parts[1])
+    if not 0<=idx<=2:
+        raise ValueError("Индекс реактора 0..2")
+    def number(text,limit,signed=False):
+        try:
+            v=Decimal(text)
+        except InvalidOperation:
+            raise ValueError("Ожидается число с точкой") from None
+        if not v.is_finite() or abs(v)>limit or (not signed and v<0) or v!=v.quantize(Decimal(".001")):
+            raise ValueError("Неверный диапазон или больше трёх десятичных знаков")
+        return float(v)
+    if command=="motor_stop" and len(parts)==2:
+        return f"{root}/motors/{idx}/stop", {}
+    if command in ("motor_sps","motor_rpm") and len(parts)==3:
+        return f"{root}/motors/{idx}/{command[6:]}", {"rate":number(parts[2],7000,True)}
+    if command=="motor_enable" and len(parts)==3 and parts[2] in ("0","1"):
+        return f"{root}/motors/{idx}/enable", {"enabled":parts[2]=="1"}
+    if command=="motor_micro" and len(parts)==3 and parts[2] in ("1/4","1/8","1/16","1/32"):
+        return f"{root}/motors/{idx}/microstep", {"divisor":int(parts[2][2:])}
+    if command=="stm" and len(parts) in (3,4):
+        method=parts[2].lower()
+        reads={"get_u":"voltage","get_i":"current","get_setted_u":"voltage/setpoint","get_setted_i":"current/setpoint"}
+        if method in reads and len(parts)==3:
+            return f"{root}/stm/{idx}/"+reads[method], None
+        if method=="set_u" and len(parts)==4:
+            value=int(parts[3])
+            if not 0<=value<=6000:
+                raise ValueError("Напряжение 0..6000 целых мВ")
+            return f"{root}/stm/{idx}/voltage/setpoint", {"millivolts":value}
+        if method=="set_i" and len(parts)==4:
+            return f"{root}/stm/{idx}/current/setpoint", {"milliamps":number(parts[3],50)}
+    raise ValueError("Неверная команда реактора; help")
+
 def execute(client, line):
     parts = shlex.split(line)
     if not parts:
         return True
     command = parts[0].lower()
     command = ALIASES.get(command, command)
+    if command in ("motor_sps", "motor_rpm", "motor_stop", "motor_enable", "motor_micro", "stm"):
+        path, body = reactor_command(parts)
+        result = client.request(path, body)
+        report(path, result, method="GET" if body is None else "POST")
+        return result[0]
     if command == "help" and len(parts) == 1:
         print(HELP)
         return True

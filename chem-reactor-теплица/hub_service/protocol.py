@@ -136,6 +136,9 @@ def decode_result(command: Command, reply: Frame) -> dict:
         raise DeviceError(STATUS_NAMES[reply.status], "Оборудование вернуло ошибку",
                           STATUS_HTTP[reply.status], device_status=reply.status,
                           node=reply.node, command=command.name, idx=reply.idx)
+    if command.layout.startswith("reactor_"):
+        from .reactor_protocol import decode
+        return decode(command.layout, reply)
     if command.layout == "ack":
         if any(data):
             raise ValueError("Nonzero acknowledgement payload")
