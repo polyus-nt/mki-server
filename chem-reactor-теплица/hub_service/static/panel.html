@@ -36,7 +36,7 @@
       <div class="progress-wrap" id="progress-wrap" hidden><div class="progress-track"><div id="progress-bar"></div></div><span id="progress-text" role="status"></span></div>
       <div class="summary-grid">
         <article class="stat-card"><span class="stat-label">ТЕМПЕРАТУРА РЕАКТОРА</span><div class="stat-value"><span id="reactor-temperature">—</span><small>°C</small></div><div id="reactor-temperature-meta" class="muted">DS18B20 · ещё не опрошен</div></article>
-        <article class="stat-card"><span class="stat-label">КОНТРОЛЛЕР MEGA</span><div class="stat-value">17<small>узел</small></div><div class="muted">3 двигателя · 3 STM32</div></article>
+        <article class="stat-card"><span class="stat-label">КОНТРОЛЛЕР РЕАКТОРА</span><div class="stat-value">17<small>узел</small></div><div class="muted">3 двигателя · 3 STM32</div></article>
         <article class="stat-card"><span class="stat-label">ОЧЕРЕДЬ СЕРВИСА</span><div class="stat-value" id="queue-depth">—</div><div id="queue-meta" class="muted">Нет данных</div></article>
         <article class="stat-card"><span class="stat-label">РЕЗУЛЬТАТ SELFTEST</span><div class="stat-value small" id="test-result">Не запущен</div><div id="test-meta" class="muted">Проверяет доступность, не точность</div></article>
       </div>
@@ -47,7 +47,7 @@
     </section>
 
     <section id="motors">
-      <div class="section-heading"><div><div class="eyebrow">MOTION / 02</div><h2>Шаговые двигатели</h2></div><span class="section-note">Индексы API 0–2 · USB Mega 1–3</span></div>
+      <div class="section-heading"><div><div class="eyebrow">MOTION / 02</div><h2>Шаговые двигатели</h2></div><span class="section-note">Индексы API 0–2 · USB реактора 1–3</span></div>
       <div class="info-strip"><span>i</span><p><strong>Это заданная скорость, не измеренные обороты.</strong> «Прочитать» аналогично <code>motor 0</code>: не запускает двигатель. Датчика вращения нет. «Удержание» включает драйвер без вращения; микрошаг меняется только после Stop.</p></div>
       <div id="motor-grid" class="device-grid"></div>
     </section>

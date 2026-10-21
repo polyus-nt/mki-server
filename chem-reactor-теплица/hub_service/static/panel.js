@@ -181,7 +181,7 @@ function bindForm(form, fn) {
 function motor(idx) {
   const card = $("motor-template").content.firstElementChild.cloneNode(true);
   field(card, "title").textContent = "Двигатель " + (idx + 1);
-  field(card, "node-label").textContent = "MEGA / ИНДЕКС API " + idx;
+  field(card, "node-label").textContent = "РЕАКТОР / ИНДЕКС API " + idx;
   const path = "/api/v1/reactor/motors/" + idx;
   const read = card.querySelector("[data-action=read]"); read.dataset.read = "";
   read.addEventListener("click", () => task(() => readPaths([path + "/state"])));
