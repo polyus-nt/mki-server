@@ -92,6 +92,8 @@
       <div class="reading-row"><strong>U <small>мВ</small></strong><span data-field="voltage-setpoint">—</span><span data-field="voltage">—</span></div>
       <div class="reading-row"><strong>I <small>мА</small></strong><span data-field="current-setpoint">—</span><span data-field="current">—</span></div>
       <p class="field-help">Уставка — чего вы попросили. Измерено — что прочитано с внешней платы. Эти значения могут отличаться.</p>
+      <p class="field-help">Таймер на LCD: <strong data-field="timer">не прочитан</strong>. Отсчёт работает на Arduino даже без сервера. По окончании оборудование не отключается.</p>
+      <form data-form="timer" class="form-section"><label>Таймер · целые минуты, 0 — отменить</label><div class="input-row"><input name="minutes" type="number" min="0" max="65535" step="1" placeholder="минуты" required aria-label="Длительность таймера в минутах"><button data-write disabled>Запустить / сбросить</button></div></form>
       <form data-form="voltage" class="form-section"><label>Заданное напряжение · 0–6000 мВ</label><div class="input-row"><input name="value" type="number" min="0" max="6000" step="1" placeholder="мВ" required aria-label="Уставка напряжения"><button data-write disabled>Задать U</button></div></form>
       <form data-form="current" class="form-section"><label>Заданный ток · 0–50 мА</label><div class="input-row"><input name="value" type="number" min="0" max="50" step="0.001" placeholder="мА" required aria-label="Уставка тока"><button data-write disabled>Задать I</button></div></form>
       <div class="button-row"><button data-action="read">Прочитать канал</button></div><p class="read-time" data-field="updated">Нет снимка · U/I меняются раздельно</p>

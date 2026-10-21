@@ -87,7 +87,7 @@ set_door_lock 1
 set_door_lock 0
 ```
 
-Замок без индекса: set_door_lock 1 блокирует оба. Selftest — 35 GET + OpenAPI,
+Замок без индекса: set_door_lock 1 блокирует оба. Selftest — 38 GET + OpenAPI,
 без переключения выходов. Разовый запуск: `--command selftest`.
 Адрес меняется через --url, HTTP-таймаут по умолчанию 45 с.
 

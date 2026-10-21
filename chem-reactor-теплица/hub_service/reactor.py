@@ -23,6 +23,9 @@ class Speed(Body):
 class Enable(Body):
     enabled: StrictBool
 
+class Timer(Body):
+    minutes: StrictInt = Field(ge=0,le=65535)
+
 class Micro(Body):
     divisor: StrictInt
     @field_validator("divisor")
@@ -51,6 +54,15 @@ def integer(value, signed=False):
 @router.get("/temperature")
 async def temperature(request: Request):
     return await exchange(request,"temperature")
+
+@router.get("/timers/{idx}")
+async def get_timer(idx: Index3, request: Request):
+    return await exchange(request,"timer",idx)
+
+@router.post("/timers/{idx}")
+async def set_timer(idx: Index3, body: Timer, request: Request):
+    # Информационный отсчёт; 0 отменяет. Оборудование не переключается.
+    return await exchange(request,"timer",idx,integer(body.minutes),True)
 
 @router.get("/motors/{idx}/state")
 async def motor_state(idx: Index3, request: Request):

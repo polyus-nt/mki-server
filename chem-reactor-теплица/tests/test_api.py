@@ -110,7 +110,7 @@ class ApiTests(unittest.TestCase):
             self.assertTrue(client.get("/api/v1/doors/0/state").json()["closed"])
             self.assertFalse(client.get("/api/v1/doors/1/state").json()["closed"])
             paths = console.selftest_paths(client.get("/openapi.json").json())
-            self.assertEqual(len(paths), 35)
+            self.assertEqual(len(paths), 38)
             for path in paths:
                 reply = client.get(path)
                 self.assertEqual(reply.status_code, 200, (path, reply.text))

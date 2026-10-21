@@ -25,7 +25,7 @@ class PanelTests(unittest.TestCase):
                 self.assertEqual(asset.status_code,200)
                 self.assertTrue(asset.content)
             self.assertEqual(app.state.service.transport.requests,[])
-            self.assertEqual(len(c.get("/openapi.json").json()["paths"]),25)
+            self.assertEqual(len(c.get("/openapi.json").json()["paths"]),26)
             self.assertNotIn("/panel",c.get("/openapi.json").json()["paths"])
 
     def test_no_remote_assets_and_no_com_access(self):

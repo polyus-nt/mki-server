@@ -3,10 +3,15 @@ class ReactorModel:
     def __init__(self):
         self.rate=[0,0,0]; self.micro=[4,4,4]; self.enabled=[False]*3
         self.u=[0]*3; self.i=[0]*3
+        self.minutes=[0]*3
     def packet(self,r):
         c,idx=r.command,r.idx; d=bytes(8); status=0
         value=int.from_bytes(r.data[:4],"big")
-        if c==0x60:
+        if c==0x6c: self.minutes[idx]=value
+        elif c==0x6b:
+            minutes=self.minutes[idx]
+            d=(minutes*60).to_bytes(4,"big")+minutes.to_bytes(2,"big")+bytes([bool(minutes),0])
+        elif c==0x60:
             d=(2512).to_bytes(4,"big")+bytes.fromhex("03 00 00 00")
         elif c in (0x61,0x62):
             rate=int.from_bytes(r.data[:4],"big",signed=True)

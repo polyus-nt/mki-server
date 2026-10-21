@@ -103,6 +103,14 @@ function render(path, body, ok) {
     field(card, "mode").className = "pill " + (body.running ? "ok" : "neutral");
     return;
   }
+  match = path.match(/^\/api\/v1\/reactor\/timers\/(\d)$/);
+  if (match) {
+    const card = stmCards[Number(match[1])];
+    const seconds = body.remaining_seconds;
+    field(card, "timer").textContent = !ok ? errorMessage(body) : body.state === "idle" ? "не задан" :
+      body.state === "finished" ? "время вышло" : Math.floor(seconds / 60) + ":" + String(seconds % 60).padStart(2, "0") + " · снимок, нажмите «Прочитать канал» для обновления";
+    return;
+  }
   match = path.match(/^\/api\/v1\/reactor\/stm\/(\d)\/(voltage|current)(\/setpoint)?$/);
   if (match) {
     const card = stmCards[Number(match[1])], name = match[2] + (match[3] ? "-setpoint" : "");
@@ -200,6 +208,9 @@ function stm(idx) {
   field(card, "title").textContent = "STM32 " + (idx + 1) + " · idx " + idx;
   const root = "/api/v1/reactor/stm/" + idx;
   const paths = ["/voltage", "/current", "/voltage/setpoint", "/current/setpoint"].map(p => root + p);
+  const timerPath = "/api/v1/reactor/timers/" + idx;
+  paths.push(timerPath);
+  bindForm(card.querySelector("[data-form=timer]"), data => write(timerPath, {minutes: C.number(data.get("minutes"), 0, 65535, 0)}));
   const button = card.querySelector("[data-action=read]"); button.dataset.read = "";
   button.addEventListener("click", () => task(() => readPaths(paths)));
   bindForm(card.querySelector("[data-form=voltage]"), data => write(root + "/voltage/setpoint", {millivolts: C.number(data.get("value"), 0, 6000, 0)}));

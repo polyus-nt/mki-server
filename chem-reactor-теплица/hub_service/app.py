@@ -127,7 +127,7 @@ def create_app(settings: Settings | None = None, transport_factory=SerialTranspo
                 "lock": {"node": 16, "indexed": False, "physical_locks": 2},
                 "relay_fan": {"node": 16, "indexed": False, "levels": [0, 10], "break_ms": 250},
                 "actuator_routes": [{"gateway_node": 14, "global_indices": [0, 1], "local_indices": [0, 1]}],
-                "reactor": {"node": 17, "motors": 3, "stm32": 3, "temperature": 1,
+                "reactor": {"node": 17, "motors": 3, "stm32": 3, "temperature": 1, "timers": 3,
                             "motor_feedback": False, "max_sps": 7000},
                 "admin_enabled": True, "authentication": "none"}
 

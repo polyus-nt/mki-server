@@ -2,6 +2,7 @@
 from .protocol import Command
 
 READ = {
+    "timer": Command("get_reactor_timer", 0x6b, 17, 3, "reactor_timer"),
     "temperature": Command("get_reactor_temp", 0x60, 17, 1, "temperature"),
     "motor": Command("get_motor", 0x66, 17, 3, "reactor_motor"),
     "config": Command("get_motor_config", 0x67, 17, 3, "reactor_config"),
@@ -12,6 +13,7 @@ READ = {
     "current_setpoint": Command("get_stm_current_setpoint", 0x75, 17, 3, "reactor_current_setpoint"),
 }
 WRITE = {
+    "timer": Command("set_reactor_timer", 0x6c, 17, 3, "ack"),
     "sps": Command("set_motor_sps", 0x61, 17, 3, "ack"),
     "rpm": Command("set_motor_rpm", 0x62, 17, 3, "ack"),
     "stop": Command("stop_motor", 0x63, 17, 3, "ack"),
@@ -24,6 +26,17 @@ WRITE = {
 
 def decode(layout, reply):
     d = reply.data
+    if layout == "reactor_timer":
+        seconds=int.from_bytes(d[:4],"big")
+        minutes=int.from_bytes(d[4:6],"big")
+        status=d[6]
+        if (d[7] or status>2 or seconds>minutes*60 or
+                (status==1 and (not seconds or not minutes)) or
+                (status!=1 and seconds) or (status==0 and minutes) or
+                (status==2 and not minutes)):
+            raise ValueError("Invalid reactor timer state")
+        return {"idx":reply.idx,"duration_minutes":minutes,"remaining_seconds":seconds,
+                "state":("idle","running","finished")[status]}
     if layout == "reactor_motor":
         if any(abs(int.from_bytes(d[offset:offset+4],"big",signed=True))>7000000 for offset in (0,4)):
             raise ValueError("Motor speed out of range")

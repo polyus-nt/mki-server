@@ -31,6 +31,7 @@ COMMANDS = {
     "lock": ("/api/v1/lock/state", None),
     "relay": ("/api/v1/relay-fan/level", None),
     "reactor_temp": ("/api/v1/reactor/temperature", None),
+    "timer": ("/api/v1/reactor/timers/{idx}", 3),
     "motor": ("/api/v1/reactor/motors/{idx}/state", 3),
 }
 ALIASES = {"get_temp": "temp", "get_pressure": "pressure", "get_gas": "gas",
@@ -47,6 +48,7 @@ set_relay_level 0..10 — уровень релейного вентилятор
 get /api/v1/... — произвольный GET на этом же сервере
 selftest — последовательно все GET API и все допустимые индексы
 reactor_temp | motor 0..2
+timer 0..2 | set_timer idx minutes — 0..65535 минут; 0 отменяет; без отключения оборудования
 motor_sps idx скорость | motor_rpm idx обороты — число со знаком, до 3 знаков после точки
 motor_stop [idx] — остановить один мотор или все три
 motor_enable idx 0|1 | motor_micro idx 1/4|1/8|1/16|1/32
@@ -184,6 +186,11 @@ def reactor_command(parts):
     idx=int(parts[1])
     if not 0<=idx<=2:
         raise ValueError("Индекс реактора 0..2")
+    if command=="set_timer" and len(parts)==3:
+        minutes=int(parts[2])
+        if not 0<=minutes<=65535:
+            raise ValueError("Таймер: 0..65535 целых минут")
+        return f"{root}/timers/{idx}", {"minutes":minutes}
     def number(text,limit,signed=False):
         try:
             v=Decimal(text)
@@ -220,7 +227,7 @@ def execute(client, line):
         return True
     command = parts[0].lower()
     command = ALIASES.get(command, command)
-    if command in ("motor_sps", "motor_rpm", "motor_stop", "motor_enable", "motor_micro", "stm"):
+    if command in ("motor_sps", "motor_rpm", "motor_stop", "motor_enable", "motor_micro", "stm", "set_timer"):
         path, body = reactor_command(parts)
         result = client.request(path, body)
         report(path, result, method="GET" if body is None else "POST")
