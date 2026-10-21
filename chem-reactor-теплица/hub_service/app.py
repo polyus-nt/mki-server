@@ -1,9 +1,11 @@
 from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Annotated
+from pathlib import Path as FilePath
 
 from fastapi import FastAPI, Path, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt
 
 from .errors import HubError
@@ -92,6 +94,17 @@ def create_app(settings: Settings | None = None, transport_factory=SerialTranspo
     app = FastAPI(title="МС-ТЮК: теплица-химреактор", version="0.1.0", lifespan=lifespan,
                   description="Отдельный chemreactor API. Одна FIFO, без авторизации.")
     app.include_router(reactor_router)
+    static = FilePath(__file__).parent / "static"
+    app.mount("/panel/assets", StaticFiles(directory=static), name="panel-assets")
+
+    @app.get("/panel", include_in_schema=False)
+    async def panel():
+        return FileResponse(static / "panel.html", headers={
+            "Cache-Control": "no-store",
+            "Content-Security-Policy": "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+            "X-Content-Type-Options": "nosniff",
+            "Referrer-Policy": "no-referrer",
+        })
 
     @app.exception_handler(HubError)
     async def hub_error_handler(request, error):

@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Реактор · ручной стенд</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/panel/assets/panel.css">
+  <script src="/panel/assets/panel-core.js" defer></script>
+  <script src="/panel/assets/panel.js" defer></script>
+</head>
+<body>
+  <aside class="sidebar">
+    <a class="brand" href="#overview"><span class="brand-icon">C<span>R</span></span><span>CHEM REACTOR<small>АППАРАТНЫЙ СТЕНД</small></span></a>
+    <div class="side-label">РАБОЧЕЕ ПРОСТРАНСТВО</div>
+    <nav aria-label="Разделы">
+      <a href="#overview">01 <span>Обзор системы</span></a>
+      <a href="#motors">02 <span>Шаговые двигатели</span></a>
+      <a href="#stm">03 <span>Напряжение и ток</span></a>
+      <a href="#greenhouse">04 <span>Теплица</span></a>
+      <a href="#journal">05 <span>Журнал запросов</span></a>
+    </nav>
+    <div class="side-note"><span class="status-dot"></span> ОДИН API · ОДНА FIFO<p>Панель отправляет только HTTP-запросы. COM-портом управляет FastAPI.</p></div>
+    <div class="side-bottom"><span class="mono">LOCAL / PORT 8001</span><a href="/docs" target="_blank" rel="noopener">Открыть Swagger ↗</a></div>
+  </aside>
+  <main>
+    <header class="topbar"><span class="breadcrumb">Теплица-химреактор <span>/</span> Ручное тестирование</span><span id="connection" class="pill neutral">Проверяем сервис…</span></header>
+    <section id="overview">
+      <div class="eyebrow">HARDWARE WORKBENCH / 01</div>
+      <div class="page-title"><div><h1>Всё под контролем<span>.</span></h1><p class="subtitle">Показания, уставки и ручные команды — в одном месте.</p></div><span class="version">API v1 <span>↗</span></span></div>
+      <div class="toolbar">
+        <div class="toolbar-buttons"><button id="refresh" class="primary">↻ Обновить показания</button><button id="selftest">✓ Проверить связь · selftest</button><button id="cancel-batch" hidden>Прервать опрос</button></div>
+        <button id="stop-all" class="danger">■ Остановить 3 мотора</button>
+      </div>
+      <div class="progress-wrap" id="progress-wrap" hidden><div class="progress-track"><div id="progress-bar"></div></div><span id="progress-text" role="status"></span></div>
+      <div class="summary-grid">
+        <article class="stat-card"><span class="stat-label">ТЕМПЕРАТУРА РЕАКТОРА</span><div class="stat-value"><span id="reactor-temperature">—</span><small>°C</small></div><div id="reactor-temperature-meta" class="muted">DS18B20 · ещё не опрошен</div></article>
+        <article class="stat-card"><span class="stat-label">КОНТРОЛЛЕР MEGA</span><div class="stat-value">17<small>узел</small></div><div class="muted">3 двигателя · 3 STM32</div></article>
+        <article class="stat-card"><span class="stat-label">ОЧЕРЕДЬ СЕРВИСА</span><div class="stat-value" id="queue-depth">—</div><div id="queue-meta" class="muted">Нет данных</div></article>
+        <article class="stat-card"><span class="stat-label">РЕЗУЛЬТАТ SELFTEST</span><div class="stat-value small" id="test-result">Не запущен</div><div id="test-meta" class="muted">Проверяет доступность, не точность</div></article>
+      </div>
+      <div class="control-gate"><label><input id="allow-writes" type="checkbox"><span><strong>Разрешить управляющие команды</strong><small>По умолчанию доступны только чтения и stop. После перезагрузки разрешение сбрасывается.</small></span></label><span class="pill neutral" id="write-state">ТОЛЬКО ЧТЕНИЕ</span></div>
+      <p class="safety-note">Stop проходит общей очередью и не заменяет аппаратную аварийную кнопку. При потере связи двигатели могут продолжать работу.</p>
+      <details class="help-box" open><summary>Первый раз здесь? Как проверить устройство</summary><ol><li><strong>Сначала прочитайте показания.</strong> Кнопки «Прочитать» и «Обновить» ничего не включают. Тире означает, что данных ещё нет, а не нулевое значение.</li><li><strong>Чтобы запустить двигатель:</strong> разрешите управляющие команды выше, введите скорость, выберите «об/мин» и нажмите «Пуск / скорость». Например, 60 — один оборот в секунду. Минус меняет направление.</li><li><strong>Чтобы остановить:</strong> нажмите Stop на карточке или «Остановить 3 мотора». Для смены микрошага сначала остановите двигатель.</li><li><strong>Напряжение и ток меняются отдельно.</strong> 1000 мВ = 1 В, 1000 мА = 1 А. Команды реально меняют оборудование. Используйте только безопасные для вашей установки значения.</li></ol><p>«Команда принята» — это ответ контроллера, не доказательство движения. При гуле, остановке вала или нагреве прекратите тест. Если ответ потерялся, сначала прочитайте состояние, а не повторяйте запуск.</p></details>
+      <div id="notice" class="notice" role="status" hidden></div>
+    </section>
+
+    <section id="motors">
+      <div class="section-heading"><div><div class="eyebrow">MOTION / 02</div><h2>Шаговые двигатели</h2></div><span class="section-note">Индексы API 0–2 · USB Mega 1–3</span></div>
+      <div class="info-strip"><span>i</span><p><strong>Это заданная скорость, не измеренные обороты.</strong> «Прочитать» аналогично <code>motor 0</code>: не запускает двигатель. Датчика вращения нет. «Удержание» включает драйвер без вращения; микрошаг меняется только после Stop.</p></div>
+      <div id="motor-grid" class="device-grid"></div>
+    </section>
+
+    <section id="stm">
+      <div class="section-heading"><div><div class="eyebrow">ANALOG / 03</div><h2>Напряжение и ток</h2></div><span class="section-note">Измерение отдельно от уставки</span></div>
+      <div id="stm-grid" class="device-grid"></div>
+    </section>
+
+    <section id="greenhouse">
+      <div class="section-heading"><div><div class="eyebrow">GREENHOUSE / 04</div><h2>Остальная теплица</h2></div><button id="read-greenhouse">↻ Прочитать теплицу</button></div>
+      <div class="greenhouse-grid">
+        <article class="device-card"><div class="card-header"><h3>Датчики и двери</h3><span class="pill neutral">УЗЛЫ 13 / 15</span></div><div class="table-scroll"><table><thead><tr><th>Сигнал</th><th>idx 0</th><th>idx 1</th></tr></thead><tbody id="sensors-table"></tbody></table></div><p class="muted caption">MQ-2: ADC и напряжение, не концентрация газа.</p></article>
+        <article class="device-card"><div class="card-header"><h3>Вентиляторы и выходы</h3><span class="pill neutral">14 / 16</span></div><div id="fan-controls"></div><div class="output-row"><div><strong>Общий замок</strong><small id="lock-value">Состояние выхода не прочитано</small></div><div class="button-row"><button data-write id="lock-on" disabled>Блокировать</button><button data-write id="lock-off" disabled>Открыть</button></div></div><div class="output-row"><div><strong>Релейный вентилятор</strong><small id="relay-value">Уровень не прочитан</small></div><form id="relay-form" class="inline-form"><label class="sr-only" for="relay-level">Уровень релейного вентилятора</label><select id="relay-level" name="level"></select><button data-write disabled>Применить</button></form></div></article>
+      </div>
+    </section>
+
+    <section id="journal">
+      <div class="section-heading"><div><div class="eyebrow">REQUEST LOG / 05</div><h2>Журнал запросов</h2></div><div class="button-row"><button id="export-log">↓ Скачать JSON</button><button id="clear-log">Очистить</button></div></div>
+      <div class="journal-card"><div class="journal-top"><span>МЕТОД / АДРЕС / ВРЕМЯ / ОТВЕТ</span><span id="log-count">0 запросов</span></div><div id="log-list" aria-live="polite"><p class="empty-log">Здесь появятся HTTP-запросы и их ответы. Автоматического управления нет.</p></div></div>
+    </section>
+    <footer><span>CHEM REACTOR <span class="muted">/ ручной стенд</span></span><span>Без CDN · без COM-доступа · только ваш API</span></footer>
+  </main>
+
+  <template id="motor-template">
+    <article class="device-card motor-card">
+      <div class="card-header"><div><span class="mini-label" data-field="node-label"></span><h3 data-field="title"></h3></div><span class="pill neutral" data-field="mode">Не опрошен</span></div>
+      <div class="motor-speed"><span data-field="current-rpm">—</span><small>RPM · уставка</small></div>
+      <div class="spec-grid"><div><span>Целевые RPM</span><strong data-field="target-rpm">—</strong></div><div><span>STEP/с · сейчас / цель</span><strong data-field="sps">—</strong></div><div><span>EN / микрошаг</span><strong data-field="config">—</strong></div><div><span>Задержка / resyncs</span><strong data-field="timing">—</strong></div></div>
+      <form data-form="speed"><label>Скорость · минус = обратное направление</label><div class="input-row"><input name="rate" type="number" step="0.001" min="-7000" max="7000" placeholder="60" required aria-label="Скорость"><select name="unit" aria-label="Единица скорости"><option value="rpm">об/мин</option><option value="sps">шаг/с</option></select><button class="primary" data-write disabled>Пуск / скорость</button></div></form>
+      <p class="field-help">об/мин — обороты вала; шаг/с — импульсы контроллера. Ноль останавливает. Разгон занимает до 12 с.</p>
+      <div class="form-section"><label>Микрошаг · только после stop</label><form data-form="micro" class="input-row"><select name="divisor" aria-label="Микрошаг"><option value="4">1/4</option><option value="8">1/8</option><option value="16">1/16</option><option value="32">1/32</option></select><button data-write disabled>Применить</button></form></div>
+      <p class="field-help">Микрошаг делит полный шаг на части. При тех же шаг/с значение 1/8 даёт вдвое меньше оборотов, чем 1/4. Для обычного запуска менять его не требуется.</p>
+      <div class="button-row motor-actions"><button data-action="read">Прочитать</button><button data-action="enable" data-write disabled title="Включить драйвер: вал удерживается, но не вращается. Может нагреваться.">Удержание</button><button data-action="disable" data-write disabled title="Снять удержание стоящего двигателя. Сначала Stop. Не отключает силовой блок питания.">Выключить драйвер</button><button data-action="stop" class="danger-soft">Stop</button></div>
+      <p class="read-time" data-field="updated">Нет снимка состояния</p>
+    </article>
+  </template>
+  <template id="stm-template">
+    <article class="device-card stm-card">
+      <div class="card-header"><div><span class="mini-label">АНАЛОГОВЫЙ КАНАЛ</span><h3 data-field="title"></h3></div><span class="pill neutral">STM32</span></div>
+      <div class="readings-header"><span>СИГНАЛ</span><span>УСТАВКА</span><span>ИЗМЕРЕНО</span></div>
+      <div class="reading-row"><strong>U <small>мВ</small></strong><span data-field="voltage-setpoint">—</span><span data-field="voltage">—</span></div>
+      <div class="reading-row"><strong>I <small>мА</small></strong><span data-field="current-setpoint">—</span><span data-field="current">—</span></div>
+      <p class="field-help">Уставка — чего вы попросили. Измерено — что прочитано с внешней платы. Эти значения могут отличаться.</p>
+      <form data-form="voltage" class="form-section"><label>Заданное напряжение · 0–6000 мВ</label><div class="input-row"><input name="value" type="number" min="0" max="6000" step="1" placeholder="мВ" required aria-label="Уставка напряжения"><button data-write disabled>Задать U</button></div></form>
+      <form data-form="current" class="form-section"><label>Заданный ток · 0–50 мА</label><div class="input-row"><input name="value" type="number" min="0" max="50" step="0.001" placeholder="мА" required aria-label="Уставка тока"><button data-write disabled>Задать I</button></div></form>
+      <div class="button-row"><button data-action="read">Прочитать канал</button></div><p class="read-time" data-field="updated">Нет снимка · U/I меняются раздельно</p>
+    </article>
+  </template>
+</body>
+</html>
