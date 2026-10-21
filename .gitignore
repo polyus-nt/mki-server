@@ -11,3 +11,6 @@ target/
 *.db-wal
 build/
 .pio/
+chem-reactor-теплица/.venv-build/
+chem-reactor-теплица/dist/
+chem-reactor-теплица/config.json

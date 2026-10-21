@@ -28,6 +28,10 @@ stop, удержание, микрошаги, состояние), три STM32 
 
 ## Запуск на Windows
 
+Сборка в один `.exe` с HTML-панелью и внешним `config.json`:
+[WINDOWS-EXE.md](WINDOWS-EXE.md). Команда из этой папки:
+`py -3 scripts/build_windows.py`. Python нужен только на компьютере сборщика.
+
 Из корня `tjc-commutator`, Python 3.10+:
 
 ```powershell
