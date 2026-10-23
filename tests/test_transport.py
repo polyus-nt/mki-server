@@ -79,6 +79,37 @@ class SerialFake:
 
 
 class TransportTests(unittest.TestCase):
+    def test_fresh_grant_after_old_ready_lease_still_sends_once(self):
+        with patch("hub_service.transport.serial.Serial",SerialFake):
+            port=SerialTransport(Settings("test"))
+        port.receiver.close()
+        self.addCleanup(port.close)
+        now=[1.0]; sent=[]
+        ready=Frame(42,12,0xf0,0,123,kind=2,data=b"\x00\x64"+bytes(6))
+        class Receiver:
+            received_at=0.0
+            dropped_bytes=0
+            def begin(self): pass
+            def end(self): pass
+            def close(self): pass
+            def read(self,timeout):
+                if not sent: frame=ready
+                elif sent[-1].command==0xf1:
+                    now[0]+=.03
+                    frame=replace(ready,command=0xf2,session_id=123^port.session)
+                else:
+                    frame=replace(sent[-1],kind=2,data=(100653).to_bytes(4,"big")+bytes.fromhex("03 00 00 00"))
+                self.received_at=now[0]
+                return SerialFake.encode(frame)
+        port.receiver=Receiver()
+        def send(frame,deadline):
+            sent.append(frame)
+            if frame.command==0xf1: now[0]+=.08
+        port.send_frame=send
+        with patch("hub_service.transport.time.monotonic",side_effect=lambda:now[0]):
+            self.assertEqual(port.exchange(COMMANDS["pressure"],0)["value"],100653)
+        self.assertEqual([f.command for f in sent],[0xf1,0x23])
+
     def test_ready_backlog_produces_one_claim_for_newest_ticket(self):
         with patch("hub_service.transport.serial.Serial", SerialFake):
             port = SerialTransport(Settings("test",exchange_timeout=.5))

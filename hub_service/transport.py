@@ -68,7 +68,10 @@ class SerialTransport:
 
     def send_frame(self, frame, deadline):
         log.debug("TX API: %s", frame.encode().hex(" "))
+        started = time.monotonic()
         self.send(b"".join(envelope(byte) for byte in frame.encode()), deadline)
+        log.debug("TX finished: command=0x%02x ticket=%04x write_ms=%.1f",frame.command,
+                  frame.tx_id,(time.monotonic()-started)*1000)
 
     def exchange(self, command: Command, idx: int, data: bytes = bytes(8)) -> dict:
         self.receiver.begin()
@@ -81,7 +84,8 @@ class SerialTransport:
         deadline = time.monotonic() + self.settings.exchange_timeout
         parser, received, ticket, request = ReplyParser(), 0, None, None
         permits, claim_until = PermitTracker(), 0.0
-        ready_seen = claims_sent = grants_seen = 0
+        ready_seen = claims_sent = grants_seen = grants_accepted = 0
+        max_claim_write_ms = 0.0
         while time.monotonic() < deadline:
             chunk = self.receiver.read(min(.005, max(0, deadline-time.monotonic())))
             received += len(chunk)
@@ -94,10 +98,16 @@ class SerialTransport:
                         ready_seen += 1
                         if permits.accept((reply.session_id,reply.tx_id),received_at):
                             newest = reply
-                    elif (ticket is not None and control(reply, GRANT)
-                          and time.monotonic() < claim_until
-                          and (reply.tx_id, reply.session_id) == (ticket.tx_id, ticket.session_id ^ self.session)):
+                    elif control(reply, GRANT):
                         grants_seen += 1
+                        # Хаб запускает новое окно после GRANT, не после READY.
+                        if ticket is None or time.monotonic()-received_at >= .075:
+                            log.debug("GRANT rejected: no CLAIM or stale RX queue")
+                            continue
+                        if (reply.tx_id,reply.session_id)!=(ticket.tx_id,ticket.session_id ^ self.session):
+                            log.debug("GRANT rejected: ticket/session mismatch")
+                            continue
+                        grants_accepted += 1
                         request = Frame(reply.tx_id, command.node, command.code, idx,
                                         reply.session_id, data=data)
                         # Запись действия ровно один раз. Ошибка/потеря ответа не
@@ -118,10 +128,14 @@ class SerialTransport:
             if newest is not None and request is None and time.monotonic() >= claim_until:
                 if time.monotonic()-received_at < .075:
                     ticket = newest
-                    claim_until = received_at+.100
                     claims_sent += 1
+                    before_write = time.monotonic()
                     self.send_frame(replace(ticket, kind=1, command=CLAIM,
                                             data=self.session.to_bytes(8,"big")), deadline)
+                    max_claim_write_ms = max(max_claim_write_ms,(time.monotonic()-before_write)*1000)
+                    claim_until = time.monotonic()+.100
+                    log.debug("CLAIM: ticket=%04x rx_age_ms=%.1f",ticket.tx_id,
+                              (time.monotonic()-received_at)*1000)
             if chunk:
                 # Огромный dump в журнал Raspberry не должен задерживать CLAIM.
                 log.debug("RX RAW (%s bytes): %s%s",len(chunk),chunk[:160].hex(" "),
@@ -130,4 +144,6 @@ class SerialTransport:
                        rx_bytes=received, node=command.node, command=command.name, idx=idx,
                        command_sent=request is not None, ready_seen=ready_seen,
                        claims_sent=claims_sent, grants_seen=grants_seen,
+                       grants_accepted=grants_accepted,
+                       max_claim_write_ms=round(max_claim_write_ms,1),
                        rx_dropped_bytes=self.receiver.dropped_bytes)
