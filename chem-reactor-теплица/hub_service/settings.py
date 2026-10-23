@@ -5,7 +5,7 @@ import os
 
 @dataclass(frozen=True)
 class Settings:
-    serial_port: str
+    serial_port: str = "auto"
     queue_capacity: int = 64
     queue_timeout: float = 30.0
     exchange_timeout: float = 5.0
@@ -21,4 +21,4 @@ class Settings:
 
     @classmethod
     def from_env(cls):
-        return cls(serial_port=os.getenv("MSTJUK_SERIAL_PORT", ""))
+        return cls(serial_port=os.getenv("MSTJUK_SERIAL_PORT", "auto"))

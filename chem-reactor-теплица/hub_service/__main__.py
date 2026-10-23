@@ -1,4 +1,6 @@
 import argparse
+import asyncio
+from contextlib import suppress
 import logging
 import os
 import json
@@ -11,7 +13,7 @@ from .app import create_app
 from .settings import Settings
 
 
-DEFAULTS = dict(serial_port="", host="127.0.0.1", http_port=8001,
+DEFAULTS = dict(serial_port="auto", host="127.0.0.1", http_port=8001,
                 queue_capacity=64, queue_timeout=30, exchange_timeout=5, debug=False)
 
 
@@ -77,6 +79,28 @@ def parse_options(argv=None):
     return args
 
 
+async def serve(app, args):
+    server = uvicorn.Server(uvicorn.Config(app, host=args.host, port=args.http_port,
+                                        workers=1, log_level="debug" if args.debug else "info"))
+
+    async def watch_worker():
+        while True:
+            await asyncio.sleep(1)
+            service = getattr(app.state, "service", None)
+            if service is not None and service.task is not None and service.task.done():
+                logging.error("Аппаратный worker остановлен; завершаем сервис для перезапуска systemd")
+                server.should_exit = True
+                return
+
+    watcher = asyncio.create_task(watch_worker())
+    try:
+        await server.serve()
+    finally:
+        watcher.cancel()
+        with suppress(asyncio.CancelledError):
+            await watcher
+
+
 def main():
     args = parse_options()
     if args.list_ports:
@@ -93,8 +117,7 @@ def main():
     # Несколько workers открыли бы один и тот же аппаратный порт.
     logging.info("Панель: http://%s:%s/panel; COM: %s. Остановка: Ctrl+C",
                  args.host, args.http_port, args.serial_port)
-    uvicorn.run(create_app(args.settings), host=args.host, port=args.http_port, workers=1,
-                log_level="debug" if args.debug else "info")
+    asyncio.run(serve(create_app(args.settings), args))
 
 
 if __name__ == "__main__":
