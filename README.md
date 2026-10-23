@@ -1,5 +1,8 @@
 # Фаблаб-теплица: МС-ТЮК Hub API — FastAPI
 
+[Raspberry Pi: автопоиск USB-порта, systemd и восстановление после отключения](docs/RASPBERRY-PI.md).
+Порт можно не указывать: по умолчанию `--serial-port auto` (CH344 if06).
+
 ## Исправление RX после простоя (Linux / Raspberry Pi)
 
 Ветка `feat/fastapi-hub-service`: порт теперь непрерывно вычитывается отдельным

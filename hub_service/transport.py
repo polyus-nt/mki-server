@@ -8,6 +8,7 @@ import serial
 from .errors import DeviceError, HubError
 from .protocol import Command, Frame, ReplyParser, decode_result, envelope
 from .settings import Settings
+from .ports import resolve_port
 from .continuous_rx import ContinuousReader, PermitTracker
 
 log = logging.getLogger(__name__)
@@ -24,7 +25,7 @@ class SerialTransport:
         self.settings = settings
         self.session = secrets.randbits(64) or 1
         self.last_activity = float("-inf")
-        self.port = serial.Serial(port=settings.serial_port, baudrate=BUS_BAUD,
+        self.port = serial.Serial(port=resolve_port(settings.serial_port), baudrate=BUS_BAUD,
             bytesize=serial.EIGHTBITS, parity=serial.PARITY_NONE, stopbits=serial.STOPBITS_ONE,
             timeout=.005, write_timeout=1, xonxoff=False, rtscts=False, dsrdtr=False,
             exclusive=True if os.name == "posix" else None)
