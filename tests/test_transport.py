@@ -24,6 +24,7 @@ class SerialFake:
         self.closed = False
         self.counter = 0
         self.resets = 0
+        self.next_ready = time.monotonic() + .02
 
     def write(self, data):
         written = min(2,len(data))
@@ -61,6 +62,10 @@ class SerialFake:
         if not size:
             return b""
         if not self.incoming:
+            if time.monotonic() < self.next_ready:
+                time.sleep(.001)
+                return b""
+            self.next_ready = time.monotonic() + .02
             self.counter += 1
             frame = Frame(self.counter & 65535, 12, 0xf0, 0,
                           123 ^ (self.counter >> 16), kind=2,
@@ -74,9 +79,40 @@ class SerialFake:
 
 
 class TransportTests(unittest.TestCase):
+    def test_ready_backlog_produces_one_claim_for_newest_ticket(self):
+        with patch("hub_service.transport.serial.Serial", SerialFake):
+            port = SerialTransport(Settings("test",exchange_timeout=.5))
+        self.addCleanup(port.close)
+        begin = port.receiver.begin
+        def inject():
+            result = begin()
+            ready = Frame(0,12,0xf0,0,123,kind=2,data=b"\x00\x64"+bytes(6))
+            # Как в журнале Raspberry: новые окна, затем обратный ход старых.
+            frames = [replace(ready,tx_id=i) for i in list(range(100,121))+list(range(90,100))]
+            port.port.incoming.extend(b"".join(port.port.encode(f) for f in frames))
+            return result
+        port.receiver.begin = inject
+        self.assertEqual(port.exchange(COMMANDS["pressure"],0)["value"],100653)
+        self.assertEqual([f.tx_id for f in port.port.claims],[120])
+        self.assertEqual(len(port.port.requests),1)
+
+    def test_recovery_after_no_grant_without_reopening_port(self):
+        with patch("hub_service.transport.serial.Serial", SerialFake):
+            port = SerialTransport(Settings("test",exchange_timeout=.08))
+        self.addCleanup(port.close)
+        original = port.send_frame
+        port.send_frame = lambda frame,deadline: None
+        with self.assertRaises(HubError) as error:
+            port.exchange(COMMANDS["pwm"],0)
+        self.assertFalse(error.exception.details["command_sent"])
+        port.send_frame = original
+        self.assertEqual(port.exchange(COMMANDS["pressure"],0)["value"],100653)
+        self.assertFalse(port.port.closed)
+
     def test_serial_config_handshake_partial_writes_and_ticket_rollover(self):
         with patch("hub_service.transport.serial.Serial", SerialFake):
             port = SerialTransport(Settings("COM15"))
+        self.addCleanup(port.close)
         self.assertEqual(port.port.options["baudrate"], 115200)
         self.assertFalse(port.port.options["rtscts"])
         self.assertFalse(port.port.options["xonxoff"])
@@ -97,14 +133,16 @@ class TransportTests(unittest.TestCase):
     def test_buffer_reset_is_immediate(self):
         with patch("hub_service.transport.serial.Serial", SerialFake):
             port = SerialTransport(Settings("test"))
-        port.port.incoming.extend(b"old READY/late response")
-        with patch("hub_service.transport.time.sleep", side_effect=AssertionError("no sleeps")):
-            port.quiet()
-        self.assertFalse(port.port.incoming)
+        self.addCleanup(port.close)
+        resets = port.port.resets
+        port.quiet()
+        self.assertEqual(port.port.resets, resets) # Не flush параллельно с reader.
+        self.assertFalse(port.receiver._chunks)
 
     def test_raw_silence_never_sends_a_command(self):
         with patch("hub_service.transport.serial.Serial", SerialFake):
-            port = SerialTransport(Settings("test", exchange_timeout=.01))
+            port = SerialTransport(Settings("test", exchange_timeout=.05))
+        self.addCleanup(port.close)
         port.read = lambda timeout: b""
         with self.assertRaises(HubError) as error:
             port.exchange(COMMANDS["pressure"], 0)
@@ -114,7 +152,8 @@ class TransportTests(unittest.TestCase):
 
     def test_missing_grant_never_sends_set(self):
         with patch("hub_service.transport.serial.Serial", SerialFake):
-            port = SerialTransport(Settings("test", exchange_timeout=.01))
+            port = SerialTransport(Settings("test", exchange_timeout=.05))
+        self.addCleanup(port.close)
         original = port.send_frame
         def lose_claim(frame, deadline):
             if frame.command != 0xf1:
@@ -129,7 +168,8 @@ class TransportTests(unittest.TestCase):
     @unittest.skipUnless(os.name == "posix", "PTY requires POSIX")
     def test_lost_set_reply_never_resends_action(self):
         with patch("hub_service.transport.serial.Serial", SerialFake):
-            port=SerialTransport(Settings("test",exchange_timeout=.02))
+            port=SerialTransport(Settings("test",exchange_timeout=.15))
+        self.addCleanup(port.close)
         write=port.port.write
         def lose_reply(data):
             count=write(data)
@@ -150,7 +190,7 @@ class TransportTests(unittest.TestCase):
         import tty
         tty.setraw(slave)  # Не эхоить ранний READY до открытия pyserial.
         stop = threading.Event()
-        errors, requests = [], []
+        errors, requests, claims = [], [], []
 
         def hardware():
             try:
@@ -177,6 +217,7 @@ class TransportTests(unittest.TestCase):
                             continue
                         request = Frame.decode(bytes(frame)); frame.clear()
                         if request.command == 0xf1:
+                            claims.append(request)
                             grant = replace(request,kind=2,command=0xf2,
                                             session_id=request.session_id ^ int.from_bytes(request.data,"big"), data=b"\x00\x64"+bytes(6))
                             os.write(master,b"".join(envelope(b,99) for b in grant.encode()))
@@ -224,6 +265,11 @@ class TransportTests(unittest.TestCase):
                 response = client.get("/api/v1/pressure/0")
                 self.assertEqual(response.status_code, 200, response.text)
                 self.assertEqual(response.json()["value"], 100653)
+                # Пока HTTP-запросов нет, RX работает, но клиент не занимает шину CLAIM.
+                before = len(claims)
+                time.sleep(.35)
+                self.assertEqual(len(claims),before)
+                self.assertFalse(client.app.state.service.transport.receiver._chunks)
                 self.assertTrue(client.get("/api/v1/doors/1/state").json()["closed"])
                 for idx in range(6):
                     for command, value in (("pwm", 100 + idx), ("rpm", 1200 + idx)):

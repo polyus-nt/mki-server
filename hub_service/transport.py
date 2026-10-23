@@ -1,4 +1,4 @@
-"""115200 SimpleBus. Один I/O-поток, без фиксированного ожидания тишины."""
+"""115200 SimpleBus: постоянный поток RX и один последовательный отправитель."""
 import logging
 import os
 import secrets
@@ -8,6 +8,7 @@ import serial
 from .errors import DeviceError, HubError
 from .protocol import Command, Frame, ReplyParser, decode_result, envelope
 from .settings import Settings
+from .continuous_rx import ContinuousReader, PermitTracker
 
 log = logging.getLogger(__name__)
 BUS_BAUD = 115200
@@ -27,20 +28,31 @@ class SerialTransport:
             bytesize=serial.EIGHTBITS, parity=serial.PARITY_NONE, stopbits=serial.STOPBITS_ONE,
             timeout=.005, write_timeout=1, xonxoff=False, rtscts=False, dsrdtr=False,
             exclusive=True if os.name == "posix" else None)
+        try:
+            self.port.reset_input_buffer()
+            # Один владелец RX, даже пока worker ждёт HTTP-запроса.
+            self.receiver = ContinuousReader(lambda timeout: self.read(timeout))
+        except BaseException:
+            self.port.close()
+            raise
+        log.info("Постоянный RX включён: порт вычитывается и между HTTP-запросами")
 
     def close(self):
-        self.port.close()
+        try:
+            self.receiver.close()
+        finally:
+            self.port.close()
 
     def read(self, timeout):
         # Не ждём заполнения 1024 байт: USB мог уже доставить целый короткий кадр.
         self.port.timeout = max(0, timeout)
         first = self.port.read(1)
-        return first + self.port.read(self.port.in_waiting) if first else b""
+        return first + self.port.read(min(self.port.in_waiting,4095)) if first else b""
 
     def quiet(self):
-        # Совместимое имя для service/recovery. Только немедленный сброс старого
-        # буфера вне активного обмена: старое READY не является разрешением.
-        self.port.reset_input_buffer()
+        # Нельзя делать tcflush/reset_input_buffer параллельно с потоком RX.
+        # Старые данные непрерывно вычитываются; очищаем только очередь приложения.
+        self.receiver.clear()
 
     def send(self, packet, deadline):
         self.port.write_timeout = max(.001, deadline - time.monotonic())
@@ -59,22 +71,33 @@ class SerialTransport:
         self.send(b"".join(envelope(byte) for byte in frame.encode()), deadline)
 
     def exchange(self, command: Command, idx: int, data: bytes = bytes(8)) -> dict:
-        if time.monotonic()-self.last_activity > .05:
-            self.quiet()  # После простоя отбросить устаревшие предложения окна.
+        self.receiver.begin()
+        try:
+            return self._exchange(command, idx, data)
+        finally:
+            self.receiver.end()
+
+    def _exchange(self, command: Command, idx: int, data: bytes = bytes(8)) -> dict:
         deadline = time.monotonic() + self.settings.exchange_timeout
         parser, received, ticket, request = ReplyParser(), 0, None, None
+        permits, claim_until = PermitTracker(), 0.0
+        ready_seen = claims_sent = grants_seen = 0
         while time.monotonic() < deadline:
-            chunk = self.read(min(.005, max(0, deadline-time.monotonic())))
+            chunk = self.receiver.read(min(.005, max(0, deadline-time.monotonic())))
             received += len(chunk)
-            if chunk:
-                log.debug("RX RAW: %s", chunk.hex(" "))
-            for reply in parser.feed(chunk, time.monotonic()):
+            now = time.monotonic()
+            received_at = self.receiver.received_at
+            newest = None
+            for reply in list(parser.feed(chunk, now)):
                 if request is None:
                     if control(reply, READY):
-                        ticket = reply
-                        self.send_frame(replace(reply, kind=1, command=CLAIM, data=self.session.to_bytes(8, "big")), deadline)
+                        ready_seen += 1
+                        if permits.accept((reply.session_id,reply.tx_id),received_at):
+                            newest = reply
                     elif (ticket is not None and control(reply, GRANT)
+                          and time.monotonic() < claim_until
                           and (reply.tx_id, reply.session_id) == (ticket.tx_id, ticket.session_id ^ self.session)):
+                        grants_seen += 1
                         request = Frame(reply.tx_id, command.node, command.code, idx,
                                         reply.session_id, data=data)
                         # Запись действия ровно один раз. Ошибка/потеря ответа не
@@ -92,6 +115,19 @@ class SerialTransport:
                     raise  # Валидная ошибка датчика тоже завершает пайплайн немедленно.
                 except ValueError as error:
                     log.warning("Отклонён ответ: %s", error)
+            if newest is not None and request is None and time.monotonic() >= claim_until:
+                if time.monotonic()-received_at < .075:
+                    ticket = newest
+                    claim_until = received_at+.100
+                    claims_sent += 1
+                    self.send_frame(replace(ticket, kind=1, command=CLAIM,
+                                            data=self.session.to_bytes(8,"big")), deadline)
+            if chunk:
+                # Огромный dump в журнал Raspberry не должен задерживать CLAIM.
+                log.debug("RX RAW (%s bytes): %s%s",len(chunk),chunk[:160].hex(" "),
+                          " ..." if len(chunk)>160 else "")
         raise HubError("HOST_TIMEOUT", "Разрешение/подходящий ответ хаба не пришёл вовремя", 504,
                        rx_bytes=received, node=command.node, command=command.name, idx=idx,
-                       command_sent=request is not None)
+                       command_sent=request is not None, ready_seen=ready_seen,
+                       claims_sent=claims_sent, grants_seen=grants_seen,
+                       rx_dropped_bytes=self.receiver.dropped_bytes)
